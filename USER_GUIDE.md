@@ -77,22 +77,28 @@ MangaOriginalData/
 ```
 
 ### 2.2 執行清洗腳本
+此步驟是整個資料處理流程的第一步，負責從原始資料中提取、清洗、過濾並分割圖片。它將引導您完成白名單確認與硬碟空間評估。
+
+**指令範例:**
 ```bash
-python prepare_dataset.py --num_samples_per_artist 400
+python prepare_dataset.py \
+    --original_data_dir MangaOriginalData \
+    --target_dataset_dir Manga_Dataset_Clean \
+    --num_samples_per_artist 400 \
+    --whitelist whitelist.txt \
+    --history trained_history.txt \
+    --min_aspect_ratio 0.5 \
+    --max_aspect_ratio 2.0
 ```
 
-### 2.3 互動式操作指引
-1.  **白名單確認**：
-    *   首次執行時，程式會自動掃描目錄並建立 `whitelist.txt`。
-    *   **請依提示打開該檔案編輯**：保留要訓練的作者，若要略過某位作者，請在行首加上 `#`。
-    *   編輯存檔後，回到終端機按 `Enter` 繼續。
-    *   *注意：若未來新增作者資料夾，再次執行此腳本時會自動偵測並加入白名單，提示您確認。*
-
-2.  **硬碟空間評估**：
-    *   程式會根據白名單與歷史紀錄 (`trained_history.txt`) 估算所需空間。
-    *   **新作者**：全量採樣 (預設 400 張)。
-    *   **已訓練作者**：減量採樣 (預設 20%，即 80 張)，以節省空間並保留記憶。
-    *   確認空間充足後，輸入 `y` 繼續。
+**參數說明:**
+*   `--original_data_dir`: **原始資料來源目錄**。您的作者資料夾應位於此目錄下。
+*   `--target_dataset_dir`: **目標資料集輸出目錄**。清洗後的圖片將會輸出到此目錄，並自動分為 `train`, `val`, `test` 子目錄。
+*   `--num_samples_per_artist`: **每個藝術家目標採樣的圖片總數**。程式將盡力達到此數量。
+    *   *提示*: 若該作者已被記錄在 `trained_history.txt` 中，則會自動調整為 `20%` 的採樣量 (例如，若設定 400，則為 80 張)。
+*   `--whitelist`: **白名單檔案名稱**。程式會建立或讀取此檔案，以決定哪些作者的資料應被處理。
+*   `--history`: **訓練歷史紀錄檔案名稱**。程式會讀取此檔案來判斷哪些作者是「已訓練」的，以應用減量採樣策略。
+*   `--min_aspect_ratio`, `--max_aspect_ratio`: **圖片長寬比過濾**。用於過濾掉極端長寬比的圖片 (例如，過長的條漫)。
 
 ---
 
