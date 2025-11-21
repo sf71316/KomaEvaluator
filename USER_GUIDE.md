@@ -94,12 +94,14 @@ python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces
 ## 4. 模型訓練流程 (Model Training)
 
 ### 4.1 開始訓練
-使用 `convnext_v2_tiny_local` 模型進行訓練，並啟用歷史紀錄功能：
+使用 `convnext_v2_tiny_local` 模型進行訓練，並啟用歷史紀錄功能。以下參數是經過優化的推薦設定：
+
 ```bash
-python train.py --data_dir Manga_Dataset_Faces --model convnext_v2_tiny_local --epochs 50 --batch_size 32 --save_path final_model.pth --record_history
+python train.py --data_dir Manga_Dataset_Faces --model convnext_v2_tiny_local --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
 ```
 *   `--record_history`: **重要！** 訓練成功結束後，會將本次訓練的作者寫入 `trained_history.txt`，供下次 `prepare_dataset.py` 減量採樣使用。
 *   `--amp`: 建議開啟混合精度訓練以節省顯存並加速。
+*   `--lr`, `--weight_decay`, `--drop_path`: 針對 ConvNeXt V2 微調過的超參數。
 
 ### 4.2 中斷與恢復 (Checkpoint & Resume)
 *   **手動中斷**：在終端機按 `Ctrl+C`。程式會自動儲存當前進度 (Checkpoint) 並顯示恢復指令。
