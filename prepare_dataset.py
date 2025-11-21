@@ -168,7 +168,7 @@ def check_disk_space_and_confirm(target_dir, artists, trained_history, num_sampl
     artist_stats = {'full': 0, 'reduced': 0}
     
     if num_samples_per_artist is not None: # 如果設定了目標張數
-        AVG_IMG_SIZE_MB_PER_SAMPLE = 0.5 # 裁剪後單張圖片估計約 0.5MB
+        AVG_IMG_SIZE_MB_PER_SAMPLE = 1.2 # 上調至 1.2MB (保守估計高畫質漫畫)
         for artist in artists:
             is_trained = artist in trained_history
             if is_trained:
@@ -190,8 +190,8 @@ def check_disk_space_and_confirm(target_dir, artists, trained_history, num_sampl
                         if file.lower().endswith(tuple(['.zip', '.jpg', '.jpeg', '.png', '.bmp', '.webp'])):
                             raw_data_size_mb += os.path.getsize(os.path.join(root, file)) / (1024**2)
 
-        # 考慮解壓縮和處理後的膨脹 (保守估計 1.1 倍)
-        estimated_total_mb = raw_data_size_mb * 1.1
+        # 考慮解壓縮和處理後的膨脹 (上調至 1.5 倍以確保安全空間)
+        estimated_total_mb = raw_data_size_mb * 1.5
         artist_stats['full'] = len(artists) # 視為所有都是全量處理
 
     estimated_gb = estimated_total_mb / 1024
