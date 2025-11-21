@@ -44,7 +44,7 @@ python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces
 python prepare_patches.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Patches --num_workers 8
 
 # 3. 合併資料集
-python merge_and_split.py --face_dir Manga_Dataset_Faces --patch_dir Manga_Dataset_Patches --output_dir Manga_Dataset_Mixed
+python merge_and_split.py --dirs Manga_Dataset_Faces Manga_Dataset_Patches --dst_dir Manga_Dataset_Mixed
 ```
 
 ### 4. 模型訓練 (Training)

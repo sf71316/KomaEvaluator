@@ -144,20 +144,20 @@ python prepare_patches.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_
 | `--target_count` | 否 | `400` | **每位畫師的目標切塊數量**。 |
 
 ### 3.3 合併資料集 (混合訓練)
-將「人臉特徵」與「紋理特徵」合併為單一訓練集，通常能獲得最佳的畫風識別效果。
+將「人臉特徵」與「紋理特徵」合併為單一訓練集，通常能獲得最佳的畫風識別效果。此工具會自動掃描所有來源目錄，合併同名畫師的圖片，並重新分割為訓練、驗證和測試集。
 
 ```bash
-python merge_and_split.py --faces_dir Manga_Dataset_Faces --patches_dir Manga_Dataset_Patches --output_dir Manga_Dataset_Mixed --split_ratio 0.5
+python merge_and_split.py --dirs Manga_Dataset_Faces Manga_Dataset_Patches --dst_dir Manga_Dataset_Mixed --val_ratio 0.15 --test_ratio 0.15
 ```
 
 **參數說明:**
 
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
-| `--faces_dir` | 是 | 無 | **人臉資料集目錄** (例如 `Manga_Dataset_Faces`)。 |
-| `--patches_dir` | 是 | 無 | **紋理切塊資料集目錄** (例如 `Manga_Dataset_Patches`)。 |
-| `--output_dir` | 是 | 無 | **合併後的輸出目錄**。這將作為訓練的輸入 (例如 `Manga_Dataset_Mixed`)。 |
-| `--split_ratio` | 否 | `0.5` | **人臉與紋理切塊的混合比例**。例如，`0.5` 表示各佔 50%。 |
+| `--dirs` | 是 | 無 | **來源資料集目錄列表**。可以指定多個目錄 (以空格分隔)，例如人臉和紋理目錄。 |
+| `--dst_dir` | 是 | 無 | **最終輸出的資料集目錄**。這將作為訓練的輸入 (例如 `Manga_Dataset_Mixed`)。 |
+| `--val_ratio` | 否 | `0.15` | **驗證集比例**。 |
+| `--test_ratio` | 否 | `0.15` | **測試集比例**。 |
 
 ---
 
