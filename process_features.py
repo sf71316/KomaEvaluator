@@ -112,7 +112,26 @@ def main():
     print("特徵處理流程完成！")
     print(f"最終資料集位於: {args.output_dir}")
     print("接下來，請執行訓練指令：")
-    print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history")
+    
+    # 智慧提示：檢查是否有舊模型可以接續
+    # 假設預設模型目錄結構
+    possible_checkpoint = os.path.join('DL_Output_Models', 'convnext_v2_tiny_local', 'checkpoint_last.pth')
+    possible_model = os.path.join('DL_Output_Models', 'convnext_v2_tiny_local', 'final_model.pth')
+    
+    if os.path.exists(possible_checkpoint):
+        print("\n[偵測到上次訓練的 Checkpoint]")
+        print("若要【接續訓練】(架構/類別未變)，請使用：")
+        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history --resume_path {possible_checkpoint}")
+        print("\n若這是【增量訓練】(有新增作者/類別)，請使用：")
+        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history --load_path {possible_checkpoint}")
+    elif os.path.exists(possible_model):
+        print("\n[偵測到舊模型權重]")
+        print("若要基於舊模型進行【微調】(Fine-tuning)，請使用：")
+        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history --load_path {possible_model}")
+    else:
+        print("\n[全新訓練]")
+        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history")
+        
     print("="*60)
 
 if __name__ == '__main__':

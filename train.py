@@ -63,21 +63,48 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, scaler=None, e
     print(f"正在載入 Checkpoint: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     
-    # 載入模型權重 (處理可能的 key 不匹配問題，特別是如果用過 DataParallel)
+    # 載入模型權重 (處理 keys 不匹配和形狀不匹配)
     state_dict = checkpoint['model_state_dict']
-    # 如果 checkpoint 的 key 有 'module.' 前綴但目前模型沒有，移除前綴
+    # 移除 module. 前綴
     if list(state_dict.keys())[0].startswith('module.') and not list(model.state_dict().keys())[0].startswith('module.'):
         state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
-    model.load_state_dict(state_dict)
-
-    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    
-    if scaler and 'scaler_state_dict' in checkpoint:
-        scaler.load_state_dict(checkpoint['scaler_state_dict'])
         
+    # 過濾掉形狀不匹配的層 (通常是 Head 層，因為類別數改變)
+    model_state_dict = model.state_dict()
+    filtered_state_dict = {}
+    for k, v in state_dict.items():
+        if k in model_state_dict:
+            if v.shape == model_state_dict[k].shape:
+                filtered_state_dict[k] = v
+            else:
+                print(f"  警告: 跳過載入層 '{k}'，因為形狀不匹配 (Checkpoint: {v.shape}, Model: {model_state_dict[k].shape})")
+        else:
+             # 可能是模型架構微調導致 key 不存在，安全跳過
+             pass
+             
+    model.load_state_dict(filtered_state_dict, strict=False)
+
+    # 只有在形狀完全匹配時才載入 optimizer 和 scheduler
+    # 如果 head 層變了，optimizer 狀態也對不上了，通常建議重置 optimizer
+    # 這裡做一個簡單判斷：如果過濾掉的 keys 超過一定數量，就不載入 optimizer
+    if len(filtered_state_dict) == len(state_dict):
+        print("  完整恢復 Optimizer 和 Scheduler 狀態")
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        if scaler and 'scaler_state_dict' in checkpoint:
+            scaler.load_state_dict(checkpoint['scaler_state_dict'])
+    else:
+        print("  警告: 由於模型結構改變 (如類別數增加)，跳過載入 Optimizer/Scheduler/Scaler 狀態，將使用新初始化的優化器。")
+
     if ema_model and 'ema_model_state_dict' in checkpoint:
-        ema_model.load_state_dict(checkpoint['ema_model_state_dict'])
+        # EMA 同樣需要過濾
+        ema_state_dict = checkpoint['ema_model_state_dict']
+        ema_model_dict = ema_model.state_dict() # 注意: ModelEmaV2 的 state_dict 結構可能不同
+        # 這裡簡化處理，如果 EMA 結構變了，可能比較難完美恢復，嘗試 best effort
+        try:
+             ema_model.load_state_dict(ema_state_dict, strict=False)
+        except:
+             print("  警告: 無法完全恢復 EMA 模型狀態")
         
     epoch = checkpoint['epoch']
     best_acc = checkpoint.get('best_acc', 0.0)
