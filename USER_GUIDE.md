@@ -11,10 +11,29 @@
 *   **CUDA**: 11.8 或 12.x (需配合 PyTorch 版本)
 
 ### 1.2 安裝依賴
-在專案根目錄下執行：
-```bash
-pip install -r requirements.txt
-```
+**強烈建議您建立並啟動 Python 虛擬環境，以避免套件衝突並保持系統環境整潔。**
+
+1.  **建立虛擬環境 (Virtual Environment):**
+    ```bash
+    python -m venv venv
+    ```
+
+2.  **啟動虛擬環境:**
+    *   **在 Windows 上:**
+        ```bash
+        .\venv\Scripts\activate
+        ```
+    *   **在 Linux / macOS 上:**
+        ```bash
+        source venv/bin/activate
+        ```
+    *   啟動後，您的命令提示符前會顯示 `(venv)`，表示您已在虛擬環境中。
+
+3.  **安裝專案所需套件:**
+    在虛擬環境中執行：
+    ```bash
+    pip install -r requirements.txt
+    ```
 *確保已安裝 `torch`, `torchvision`, `opencv-python`, `pillow`, `tqdm`, `psutil` 等核心套件。*
 
 ### 1.3 目錄結構說明
