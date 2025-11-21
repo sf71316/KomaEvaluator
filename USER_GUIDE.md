@@ -110,56 +110,61 @@ python prepare_dataset.py \
 
 ## 3. 資料預處理 (Preprocessing)
 
-此步驟將清洗後的圖片轉換為模型可用的特徵圖 (人臉)。
 
-### 3.1 執行人臉裁切
-使用多進程加速裁切：
-```bash
-python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces --num_workers 8
-```
-**參數說明:**
 
-| 參數 | 必填 | 預設值 | 說明 |
-| :--- | :---: | :--- | :--- |
-| `--src_dir` | 是 | 無 | **來源圖片目錄**。通常是上一步產生的 `Manga_Dataset_Clean`。 |
-| `--dst_dir` | 是 | 無 | **輸出目錄**。裁切後的人臉圖片將存放在此處。 |
-| `--num_workers` | 否 | CPU 核心數 | **並行處理的進程數量**。建議設為 CPU 核心數的 80% 以獲得最佳效能。 |
-| `--cascade` | 否 | `lbpcascade_animeface.xml` | **OpenCV Cascade 檔案路徑**。用於人臉偵測的模型檔。 |
-| `--min_size` | 否 | `40` | **最小人臉尺寸**。小於此尺寸的人臉將被忽略。 |
+此步驟將清洗後的圖片轉換為模型可用的特徵圖 (人臉與紋理)，並自動合併為最終訓練集。我們提供了一個一鍵式腳本來完成所有工作。
 
-### 3.2 執行紋理提取
-提取高品質的紋理切塊，以捕捉畫風的筆觸與網點特徵。
-```bash
-python prepare_patches.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Patches --num_workers 8 --target_count 400
-```
 
-**參數說明:**
 
-| 參數 | 必填 | 預設值 | 說明 |
-| :--- | :---: | :--- | :--- |
-| `--src_dir` | 是 | 無 | **來源圖片目錄**。通常是 `Manga_Dataset_Clean`。 |
-| `--dst_dir` | 是 | 無 | **輸出目錄**。提取的紋理切塊將存放在此處。 |
-| `--num_workers` | 否 | CPU 核心數 | **並行處理的進程數量**。 |
-| `--patch_size` | 否 | `224` | **切塊大小** (像素)。建議與模型輸入大小一致。 |
-| `--target_count` | 否 | `400` | **每位畫師的目標切塊數量**。 |
+### 3.1 執行特徵處理流水線
 
-### 3.3 合併資料集 (混合訓練)
-將「人臉特徵」與「紋理特徵」合併為單一訓練集，通常能獲得最佳的畫風識別效果。此工具會自動掃描所有來源目錄，合併同名畫師的圖片，並重新分割為訓練、驗證和測試集。
+此腳本會依序執行：
+
+1.  **人臉裁切** (`crop_faces.py`)
+
+2.  **紋理提取** (`prepare_patches.py`)
+
+3.  **資料集合併** (`merge_and_split.py`)
+
+
 
 ```bash
-python merge_and_split.py --dirs Manga_Dataset_Faces Manga_Dataset_Patches --dst_dir Manga_Dataset_Mixed --val_ratio 0.15 --test_ratio 0.15
+
+python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 8 --target_count 400
+
 ```
+
+
 
 **參數說明:**
 
+
+
 | 參數 | 必填 | 預設值 | 說明 |
+
 | :--- | :---: | :--- | :--- |
-| `--dirs` | 是 | 無 | **來源資料集目錄列表**。可以指定多個目錄 (以空格分隔)，例如人臉和紋理目錄。 |
-| `--dst_dir` | 是 | 無 | **最終輸出的資料集目錄**。這將作為訓練的輸入 (例如 `Manga_Dataset_Mixed`)。 |
-| `--val_ratio` | 否 | `0.15` | **驗證集比例**。 |
-| `--test_ratio` | 否 | `0.15` | **測試集比例**。 |
+
+| `--src_dir` | 否 | `Manga_Dataset_Clean` | **來源圖片目錄**。即上一步驟的產出。 |
+
+| `--output_dir` | 否 | `Manga_Dataset_Mixed` | **最終輸出目錄**。這將作為訓練的輸入。 |
+
+| `--num_workers` | 否 | `8` | **並行處理的進程數量**。 |
+
+| `--target_count` | 否 | `400` | **每個畫師的目標特徵數量** (人臉與紋理各以此為目標)。 |
+
+| `--faces_dir` | 否 | `Intermediate_Faces` | **人臉特徵中間產出目錄**。 |
+
+| `--patches_dir` | 否 | `Intermediate_Patches` | **紋理特徵中間產出目錄**。 |
+
+| `--skip_faces` | 否 | `False` | **跳過人臉裁切步驟**。 |
+
+| `--skip_patches` | 否 | `False` | **跳過紋理提取步驟**。 |
+
+
 
 ---
+
+
 
 ## 4. 模型訓練流程 (Model Training)
 

@@ -21,6 +21,8 @@ Test_Dataset_Clean/
 Test_Dataset_Faces/
 Test_Dataset_Patches/
 Test_Dataset_Mixed/
+Test_Intermediate_Faces/
+Test_Intermediate_Patches/
 test_whitelist.txt
 test_history.txt
 
