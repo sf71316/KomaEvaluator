@@ -42,12 +42,15 @@ Project_Root/
 ├── MangaOriginalData/      # [輸入] 原始漫畫資料存放處 (每位作者一個子資料夾)
 ├── Manga_Dataset_Clean/    # [輸出] 清洗與採樣後的乾淨圖片
 ├── Manga_Dataset_Faces/    # [輸出] 裁切後的人臉資料集
-├── Manga_Dataset_Mixed/    # [輸出] 最終用於訓練的混合資料集
+├── Manga_Dataset_Patches/  # [輸出] 提取的紋理切塊資料集
+├── Manga_Dataset_Mixed/    # [輸出] 最終用於訓練的混合資料集 (人臉 + 紋理)
 ├── DL_Output_Models/       # [輸出] 訓練好的模型與 Checkpoints
 ├── whitelist.txt           # [設定] 作者白名單 (自動生成)
 ├── trained_history.txt     # [紀錄] 已訓練過的作者紀錄 (自動生成)
 ├── prepare_dataset.py      # [工具] 資料清洗與採樣
 ├── crop_faces.py           # [工具] 多進程人臉裁切
+├── prepare_patches.py      # [工具] 多進程紋理提取
+├── merge_and_split.py      # [工具] 資料集合併
 ├── train.py                # [工具] 模型訓練
 └── ...
 ```
@@ -124,21 +127,65 @@ python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces
 | `--cascade` | 否 | `lbpcascade_animeface.xml` | **OpenCV Cascade 檔案路徑**。用於人臉偵測的模型檔。 |
 | `--min_size` | 否 | `40` | **最小人臉尺寸**。小於此尺寸的人臉將被忽略。 |
 
+### 3.2 執行紋理提取
+提取高品質的紋理切塊，以捕捉畫風的筆觸與網點特徵。
+```bash
+python prepare_patches.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Patches --num_workers 8 --target_count 400
+```
+
+**參數說明:**
+
+| 參數 | 必填 | 預設值 | 說明 |
+| :--- | :---: | :--- | :--- |
+| `--src_dir` | 是 | 無 | **來源圖片目錄**。通常是 `Manga_Dataset_Clean`。 |
+| `--dst_dir` | 是 | 無 | **輸出目錄**。提取的紋理切塊將存放在此處。 |
+| `--num_workers` | 否 | CPU 核心數 | **並行處理的進程數量**。 |
+| `--patch_size` | 否 | `224` | **切塊大小** (像素)。建議與模型輸入大小一致。 |
+| `--target_count` | 否 | `400` | **每位畫師的目標切塊數量**。 |
+
+### 3.3 合併資料集 (混合訓練)
+將「人臉特徵」與「紋理特徵」合併為單一訓練集，通常能獲得最佳的畫風識別效果。
+
+```bash
+python merge_and_split.py --face_dir Manga_Dataset_Faces --patch_dir Manga_Dataset_Patches --output_dir Manga_Dataset_Mixed
+```
+
+**參數說明:**
+
+| 參數 | 必填 | 預設值 | 說明 |
+| :--- | :---: | :--- | :--- |
+| `--face_dir` | 是 | 無 | **人臉資料集目錄**。 |
+| `--patch_dir` | 是 | 無 | **紋理切塊資料集目錄**。 |
+| `--output_dir` | 是 | 無 | **合併後的輸出目錄**。這將作為訓練的輸入。 |
+
 ---
 
 ## 4. 模型訓練流程 (Model Training)
 
 ### 4.1 開始訓練
+
 使用 `convnext_v2_tiny_local` 模型進行訓練，並啟用歷史紀錄功能。以下參數是經過優化的推薦設定：
 
+
+
 ```bash
-python train.py --data_dir Manga_Dataset_Faces --model convnext_v2_tiny_local --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
+
+python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny_local --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
+
 ```
+
+
+
 **參數說明:**
 
+
+
 | 參數 | 必填 | 預設值 | 說明 |
+
 | :--- | :---: | :--- | :--- |
-| `--data_dir` | 是 | `Manga_Dataset` | **訓練資料集目錄**。通常是 `Manga_Dataset_Faces`。 |
+
+| `--data_dir` | 是 | `Manga_Dataset` | **訓練資料集目錄**。推薦使用合併後的 `Manga_Dataset_Mixed`。 |
+
 | `--model` | 否 | `efficientnet_b0` | **使用的模型架構**。推薦使用 `convnext_v2_tiny_local`。 |
 | `--epochs` | 否 | `20` | **訓練總輪數**。 |
 | `--batch_size` | 否 | `32` | **批次大小**。視顯存大小調整，越大越快但顯存需求越高。 |
