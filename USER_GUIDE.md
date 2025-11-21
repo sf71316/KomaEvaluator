@@ -147,16 +147,17 @@ python prepare_patches.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_
 將「人臉特徵」與「紋理特徵」合併為單一訓練集，通常能獲得最佳的畫風識別效果。
 
 ```bash
-python merge_and_split.py --face_dir Manga_Dataset_Faces --patch_dir Manga_Dataset_Patches --output_dir Manga_Dataset_Mixed
+python merge_and_split.py --faces_dir Manga_Dataset_Faces --patches_dir Manga_Dataset_Patches --output_dir Manga_Dataset_Mixed --split_ratio 0.5
 ```
 
 **參數說明:**
 
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
-| `--face_dir` | 是 | 無 | **人臉資料集目錄**。 |
-| `--patch_dir` | 是 | 無 | **紋理切塊資料集目錄**。 |
-| `--output_dir` | 是 | 無 | **合併後的輸出目錄**。這將作為訓練的輸入。 |
+| `--faces_dir` | 是 | 無 | **人臉資料集目錄** (例如 `Manga_Dataset_Faces`)。 |
+| `--patches_dir` | 是 | 無 | **紋理切塊資料集目錄** (例如 `Manga_Dataset_Patches`)。 |
+| `--output_dir` | 是 | 無 | **合併後的輸出目錄**。這將作為訓練的輸入 (例如 `Manga_Dataset_Mixed`)。 |
+| `--split_ratio` | 否 | `0.5` | **人臉與紋理切塊的混合比例**。例如，`0.5` 表示各佔 50%。 |
 
 ---
 
