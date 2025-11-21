@@ -92,14 +92,16 @@ python prepare_dataset.py \
 ```
 
 **參數說明:**
-*   `--original_data_dir`: **[必填]** 原始資料來源目錄路徑。您的作者資料夾應位於此目錄下 (可為絕對路徑或相對路徑)。
-*   `--target_dataset_dir`: **[必填]** 目標資料集輸出目錄路徑。清洗後的圖片將會輸出到此目錄，並自動分為 `train`, `val`, `test` 子目錄 (可為絕對路徑或相對路徑)。
-*   `--num_samples_per_artist`: **[選填]** 每個藝術家目標採樣的圖片總數。程式將盡力達到此數量。**預設值**: `None` (表示不限制數量，提取所有可用圖片)。
-    *   *提示*: 若該作者已被記錄在 `trained_history.txt` 中，則會自動調整為 `20%` 的採樣量 (例如，若設定 400，則為 80 張)。
-*   `--whitelist`: **[選填]** 白名單檔案名稱。程式會建立或讀取此檔案，以決定哪些作者的資料應被處理。**預設值**: `whitelist.txt`。
-*   `--history`: **[選填]** 訓練歷史紀錄檔案名稱。程式會讀取此檔案來判斷哪些作者是「已訓練」的，以應用減量採樣策略。**預設值**: `trained_history.txt`。
-*   `--min_aspect_ratio`: **[選填]** 圖片長寬比過濾的最小值。用於過濾掉極端長寬比的圖片。**預設值**: `0.5`。
-*   `--max_aspect_ratio`: **[選填]** 圖片長寬比過濾的最大值。用於過濾掉極端長寬比的圖片。**預設值**: `2.0`。
+
+| 參數 | 必填 | 預設值 | 說明 |
+| :--- | :---: | :--- | :--- |
+| `--original_data_dir` | 是 | 無 | **原始資料來源目錄路徑**。您的作者資料夾應位於此目錄下 (可為絕對路徑或相對路徑)。 |
+| `--target_dataset_dir` | 是 | `Manga_Dataset_Clean` | **目標資料集輸出目錄路徑**。清洗後的圖片將會輸出到此目錄，並自動分為 `train`, `val`, `test` 子目錄。 |
+| `--num_samples_per_artist` | 否 | `None` | **每個藝術家目標採樣的圖片總數**。若該作者已被記錄在 `trained_history.txt` 中，則會自動調整為 `20%` 的採樣量。若未設定，則提取所有圖片。 |
+| `--whitelist` | 否 | `whitelist.txt` | **白名單檔案名稱**。程式會建立或讀取此檔案，以決定哪些作者的資料應被處理。 |
+| `--history` | 否 | `trained_history.txt` | **訓練歷史紀錄檔案名稱**。程式會讀取此檔案來判斷哪些作者是「已訓練」的，以應用減量採樣策略。 |
+| `--min_aspect_ratio` | 否 | `0.5` | **最小圖片長寬比**。用於過濾掉過於狹長的圖片。 |
+| `--max_aspect_ratio` | 否 | `2.0` | **最大圖片長寬比**。用於過濾掉過於寬扁的圖片。 |
 
 ---
 
@@ -112,8 +114,15 @@ python prepare_dataset.py \
 ```bash
 python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces --num_workers 8
 ```
-*   `--num_workers`: 設定使用的 CPU 核心數 (建議設為 CPU 核心數的 80%)。
-*   此步驟會自動略過無法辨識人臉的圖片。
+**參數說明:**
+
+| 參數 | 必填 | 預設值 | 說明 |
+| :--- | :---: | :--- | :--- |
+| `--src_dir` | 是 | 無 | **來源圖片目錄**。通常是上一步產生的 `Manga_Dataset_Clean`。 |
+| `--dst_dir` | 是 | 無 | **輸出目錄**。裁切後的人臉圖片將存放在此處。 |
+| `--num_workers` | 否 | CPU 核心數 | **並行處理的進程數量**。建議設為 CPU 核心數的 80% 以獲得最佳效能。 |
+| `--cascade` | 否 | `lbpcascade_animeface.xml` | **OpenCV Cascade 檔案路徑**。用於人臉偵測的模型檔。 |
+| `--min_size` | 否 | `40` | **最小人臉尺寸**。小於此尺寸的人臉將被忽略。 |
 
 ---
 
@@ -125,9 +134,19 @@ python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces
 ```bash
 python train.py --data_dir Manga_Dataset_Faces --model convnext_v2_tiny_local --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
 ```
-*   `--record_history`: **重要！** 訓練成功結束後，會將本次訓練的作者寫入 `trained_history.txt`，供下次 `prepare_dataset.py` 減量採樣使用。
-*   `--amp`: 建議開啟混合精度訓練以節省顯存並加速。
-*   `--lr`, `--weight_decay`, `--drop_path`: 針對 ConvNeXt V2 微調過的超參數。
+**參數說明:**
+
+| 參數 | 必填 | 預設值 | 說明 |
+| :--- | :---: | :--- | :--- |
+| `--data_dir` | 是 | `Manga_Dataset` | **訓練資料集目錄**。通常是 `Manga_Dataset_Faces`。 |
+| `--model` | 否 | `efficientnet_b0` | **使用的模型架構**。推薦使用 `convnext_v2_tiny_local`。 |
+| `--epochs` | 否 | `20` | **訓練總輪數**。 |
+| `--batch_size` | 否 | `32` | **批次大小**。視顯存大小調整，越大越快但顯存需求越高。 |
+| `--lr` | 否 | `0.001` | **學習率**。ConvNeXt V2 推薦設為 `1.2e-4`。 |
+| `--save_path` | 否 | `final_model.pth` | **模型儲存檔案名稱**。將儲存在 `DL_Output_Models/[model_name]/` 下。 |
+| `--record_history` | 否 | `False` | **啟用歷史紀錄**。訓練成功後，將本次作者寫入 `trained_history.txt`。 |
+| `--amp` | 否 | `False` | **啟用混合精度訓練**。強烈建議開啟，可節省顯存並加速。 |
+| `--resume_path` | 否 | `None` | **恢復訓練的 Checkpoint 路徑**。用於中斷後繼續訓練。 |
 
 ### 4.2 中斷與恢復 (Checkpoint & Resume)
 *   **手動中斷**：在終端機按 `Ctrl+C`。程式會自動儲存當前進度 (Checkpoint) 並顯示恢復指令。
@@ -154,7 +173,14 @@ tensorboard --logdir runs
 python export_to_onnx.py --model_path DL_Output_Models/convnext_v2_tiny_local/final_model.pth --output_path mysmodel.onnx --model convnext_v2_tiny_local --num_classes <類別數量>
 ```
 
-### 5.2 C# 整合 (參考 CSharpPredict 專案)
+**參數說明:**
+
+| 參數 | 必填 | 預設值 | 說明 |
+| :--- | :---: | :--- | :--- |
+| `--model_path` | 是 | 無 | **PyTorch 模型檔案路徑** (`.pth`)。 |
+| `--output_path` | 是 | 無 | **輸出的 ONNX 模型檔案路徑** (`.onnx`)。 |
+| `--model` | 是 | 無 | **模型架構名稱**。必須與訓練時使用的名稱一致 (如 `convnext_v2_tiny_local`)。 |
+| `--num_classes` | 是 | 無 | **分類類別數量**。必須與訓練時的類別數一致。 |
 1.  將 `mysmodel.onnx` 複製到 C# 專案目錄。
 2.  確保 C# 專案安裝了 `Microsoft.ML.OnnxRuntime`。
 3.  更新 C# 程式碼中的類別列表 (`classNames`)，需與 Python 訓練時的順序一致 (可參考 `train.py` 輸出或產生的 `classes.txt`)。
