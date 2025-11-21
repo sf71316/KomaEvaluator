@@ -107,63 +107,34 @@ python prepare_dataset.py \
 | `--max_aspect_ratio` | 否 | `2.0` | **最大圖片長寬比**。用於過濾掉過於寬扁的圖片。 |
 | `--num_workers` | 否 | `16` | **複製檔案的執行緒數量**。建議設為 CPU 核心數的 80% 以獲得最佳效能。 |
 
-### 2.3 互動式操作指引
-
-
+## 3. 資料預處理 (Preprocessing)
 
 此步驟將清洗後的圖片轉換為模型可用的特徵圖 (人臉與紋理)，並自動合併為最終訓練集。我們提供了一個一鍵式腳本來完成所有工作。
 
-
-
 ### 3.1 執行特徵處理流水線
-
 此腳本會依序執行：
-
 1.  **人臉裁切** (`crop_faces.py`)
-
 2.  **紋理提取** (`prepare_patches.py`)
-
 3.  **資料集合併** (`merge_and_split.py`)
 
-
-
 ```bash
-
 python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 8 --target_count 400
-
 ```
-
-
 
 **參數說明:**
 
-
-
 | 參數 | 必填 | 預設值 | 說明 |
-
 | :--- | :---: | :--- | :--- |
-
 | `--src_dir` | 否 | `Manga_Dataset_Clean` | **來源圖片目錄**。即上一步驟的產出。 |
-
 | `--output_dir` | 否 | `Manga_Dataset_Mixed` | **最終輸出目錄**。這將作為訓練的輸入。 |
-
 | `--num_workers` | 否 | `8` | **並行處理的進程數量**。 |
-
 | `--target_count` | 否 | `400` | **每個畫師的目標特徵數量** (人臉與紋理各以此為目標)。 |
-
 | `--faces_dir` | 否 | `Intermediate_Faces` | **人臉特徵中間產出目錄**。 |
-
 | `--patches_dir` | 否 | `Intermediate_Patches` | **紋理特徵中間產出目錄**。 |
-
 | `--skip_faces` | 否 | `False` | **跳過人臉裁切步驟**。 |
-
 | `--skip_patches` | 否 | `False` | **跳過紋理提取步驟**。 |
 
-
-
 ---
-
-
 
 ## 4. 模型訓練流程 (Model Training)
 
