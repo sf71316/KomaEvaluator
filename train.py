@@ -341,10 +341,30 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
         save_filename = f'checkpoint_interrupted_epoch_{epoch}.pth'
         save_checkpoint(checkpoint, False, checkpoint_dir, filename=save_filename)
         
-        resume_cmd = build_resume_command(os.path.join(checkpoint_dir, save_filename))
+        checkpoint_path = os.path.join(checkpoint_dir, save_filename)
+        resume_cmd = build_resume_command(checkpoint_path)
+        
+        # 自動產生恢復腳本
+        is_windows = os.name == 'nt'
+        script_ext = 'bat' if is_windows else 'sh'
+        script_name = f'resume_training.{script_ext}'
+        
+        with open(script_name, 'w', encoding='utf-8') as f:
+            if not is_windows:
+                f.write("#!/bin/bash\n")
+            f.write(resume_cmd)
+            f.write("\n")
+            if is_windows:
+                f.write("pause") # Windows 上執行完暫停，讓使用者看結果
+        
+        #賦予執行權限 (Linux/Mac)
+        if not is_windows:
+            os.chmod(script_name, 0o755)
+
         print("="*60)
-        print(f"Checkpoint 已儲存至: {os.path.join(checkpoint_dir, save_filename)}")
-        print("訓練已暫停。若要恢復訓練，請使用以下指令:")
+        print(f"Checkpoint 已儲存至: {checkpoint_path}")
+        print(f"已建立恢復腳本: {script_name}")
+        print(f"您可以直接執行 {script_name} 來恢復訓練，或是複製以下指令:")
         print(f"\n{resume_cmd}\n")
         print("="*60)
         sys.exit(0)
