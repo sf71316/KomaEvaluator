@@ -35,15 +35,22 @@ python prepare_dataset.py --num_samples_per_artist 400
 ```
 
 ### 3. 資料預處理 (Preprocessing)
+提取人臉與紋理特徵，並合併為最終資料集：
 ```bash
-# 使用 8 核心進行人臉裁切
+# 1. 人臉裁切
 python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces --num_workers 8
+
+# 2. 紋理提取 (可選)
+python prepare_patches.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Patches --num_workers 8
+
+# 3. 合併資料集
+python merge_and_split.py --face_dir Manga_Dataset_Faces --patch_dir Manga_Dataset_Patches --output_dir Manga_Dataset_Mixed
 ```
 
 ### 4. 模型訓練 (Training)
 ```bash
-# 啟用歷史紀錄與自動 Checkpoint
-python train.py --data_dir Manga_Dataset_Faces --model convnext_v2_tiny_local --epochs 50 --record_history
+# 使用合併後的資料集進行訓練
+python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny_local --epochs 50 --record_history
 ```
 
 ### 5. 部署 (Deployment)
