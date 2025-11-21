@@ -1,38 +1,65 @@
-﻿使用 ResNet-50 進行漫畫家畫風識別訓練指南
-本指南旨在將您現有的作者分類資料夾轉換為可用的訓練資料，並概述所需的準備步驟。
-1. 數據集（您已擁有的資料）
-您的資料夾結構已經是標準的圖像分類格式：
+# KomaEvaluator - 大規模漫畫畫風分類系統
 
-Manga_Dataset/
-├── 作者A的名字/
-│   ├── image_a1.jpg
-│   ├── image_a2.png
-│   └── ... (建議每個作者至少數百張圖片)
-├── 作者B的名字/
-│   ├── image_b1.jpg
-│   ├── image_b2.png
-│   └── ...
-└── 作者C的名字/
-    ├── image_c1.jpg
-    ├── image_c2.png
-    └── ...
+**KomaEvaluator** 是一個專為大規模漫畫圖像分類設計的深度學習專案。它能夠自動化地從原始漫畫檔案中提取特徵（人臉與紋理），並訓練出高準確度的畫風識別模型。
 
-2. 訓練模型選擇建議：優先使用 ResNet-50
-基於您的需求，建議優先選擇 ResNet-50 模型進行微調訓練。
-特性	ResNet-50 (推薦)	ResNet-101
-訓練速度	快	較慢
-資源需求 (VRAM)	低	高
-過度擬合風險	低 (適合較小數據集)	高
-性能	通常足夠優秀	潛在更高，但要求資源更多
-3. 環境與軟體準備
-您需要設定一個開發環境來運行訓練程式碼：
-類別	所需項目	備註
-語言	Python	這是機器學習的主要語言。
-框架	PyTorch 或 TensorFlow	推薦使用 PyTorch，社群支援豐富。
-硬體	顯示卡 (GPU)	強烈建議使用 NVIDIA GPU 以加速訓練，CPU 訓練會非常慢。
-驅動/函式庫	CUDA Toolkit	使 PyTorch/TensorFlow 能夠調用您的 NVIDIA GPU。
-Python 套件	torch、torchvision	PyTorch 核心庫和視覺工具庫。
-4. 核心準備步驟
-以下是將資料轉換為可訓練模型的步驟流程：
-以下是將資料轉換為可訓練模型的步驟流程概述：
-這通常涉及將您的資料集劃分為訓練、驗證和測試集，預處理圖像以符合模型要求，然後載入一個預訓練的 ResNet-50 模型，並調整其最後一層以匹配您的漫畫家數量，最後進行模型的微調訓練。大多數現代機器學習框架都提供了工具和函式庫來簡化這些步驟。
+本系統特別針對 **200 位以上作者**、**數萬張圖片** 的量級進行了優化，具備工業級的資料清洗、多進程加速與中斷恢復能力。
+
+## 🌟 核心特色
+
+*   **🚀 大規模高效能**：
+    *   **多進程預處理**：`crop_faces.py` 與 `prepare_patches.py` 支援多核心並行處理，速度提升 10 倍以上。
+    *   **混合精度訓練 (AMP)**：支援 FP16/BF16，大幅降低顯存需求並加速訓練。
+*   **🛡️ 穩健的訓練流程**：
+    *   **中斷恢復 (Resume)**：訓練途中當機或中斷 (`Ctrl+C`)，可隨時從 Checkpoint 恢復，無需重頭再來。
+    *   **自動資料清洗**：內建 `check_dataset_health.py` 掃描壞檔，`prepare_dataset.py` 支援互動式白名單過濾。
+*   **🔄 增量訓練機制**：
+    *   智慧記錄已訓練過的作者，再次準備資料時自動執行 **減量採樣 (20%)**，大幅節省硬碟空間與訓練時間。
+*   **🧠 先進模型架構**：
+    *   預設採用 **ConvNeXt V2** (Tiny/Base) 模型，針對漫畫線條與網點特徵有極佳的表現。
+    *   支援 **Top-5 Accuracy** 評估，在數百個類別中提供更客觀的指標。
+
+## 🛠️ 快速開始
+
+詳細操作請參閱 [📖 操作手冊 (USER_GUIDE.md)](USER_GUIDE.md)。
+
+### 1. 環境安裝
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 資料準備 (Data Preparation)
+將原始作者資料夾放入 `MangaOriginalData/`，然後執行：
+```bash
+# 互動式腳本：自動掃描、建立白名單、評估硬碟空間
+python prepare_dataset.py --num_samples_per_artist 400
+```
+
+### 3. 資料預處理 (Preprocessing)
+```bash
+# 使用 8 核心進行人臉裁切
+python crop_faces.py --src_dir Manga_Dataset_Clean --dst_dir Manga_Dataset_Faces --num_workers 8
+```
+
+### 4. 模型訓練 (Training)
+```bash
+# 啟用歷史紀錄與自動 Checkpoint
+python train.py --data_dir Manga_Dataset_Faces --model convnext_v2_tiny_local --epochs 50 --record_history
+```
+
+### 5. 部署 (Deployment)
+```bash
+# 匯出為 ONNX
+python export_to_onnx.py --model_path DL_Output_Models/.../final_model.pth ...
+```
+本專案包含一個 `CSharpPredict` 目錄，提供在 .NET 環境下載入 ONNX 模型進行預測的範例。
+
+## 📂 目錄結構
+
+*   `MangaOriginalData/`: 原始資料存放區
+*   `Manga_Dataset_Clean/`: 清洗後的圖片
+*   `Manga_Dataset_Faces/`: 人臉特徵資料集
+*   `DL_Output_Models/`: 訓練輸出 (模型與 Checkpoints)
+*   `USER_GUIDE.md`: **完整操作說明書**
+
+## 📝 授權
+MIT License
