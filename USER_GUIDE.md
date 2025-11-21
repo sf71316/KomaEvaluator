@@ -107,9 +107,7 @@ python prepare_dataset.py \
 | `--max_aspect_ratio` | 否 | `2.0` | **最大圖片長寬比**。用於過濾掉過於寬扁的圖片。 |
 | `--num_workers` | 否 | `16` | **複製檔案的執行緒數量**。建議設為 CPU 核心數的 80% 以獲得最佳效能。 |
 
----
-
-## 3. 資料預處理 (Preprocessing)
+### 2.3 互動式操作指引
 
 
 
@@ -164,6 +162,10 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 
 
 ---
+
+
+
+## 4. 模型訓練流程 (Model Training)
 
 
 
@@ -237,6 +239,8 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny --epochs
 
 | `--resume_path` | 否 | `None` | **恢復訓練的 Checkpoint 路徑**。用於中斷後繼續訓練。 |
 
+
+
 ### 4.2 中斷與恢復 (Checkpoint & Resume)
 *   **手動中斷**：在終端機按 `Ctrl+C`。程式會自動儲存當前進度 (Checkpoint) 並顯示恢復指令。
 *   **恢復訓練**：使用 `--resume_path` 參數指定 Checkpoint 檔案：
@@ -270,6 +274,7 @@ python export_to_onnx.py --model_path DL_Output_Models/convnext_v2_tiny_local/fi
 | `--output_path` | 是 | 無 | **輸出的 ONNX 模型檔案路徑** (`.onnx`)。 |
 | `--model` | 是 | 無 | **模型架構名稱**。必須與訓練時使用的名稱一致 (如 `convnext_v2_tiny_local`)。 |
 | `--num_classes` | 是 | 無 | **分類類別數量**。必須與訓練時的類別數一致。 |
+
 1.  將 `mysmodel.onnx` 複製到 C# 專案目錄。
 2.  確保 C# 專案安裝了 `Microsoft.ML.OnnxRuntime`。
 3.  更新 C# 程式碼中的類別列表 (`classNames`)，需與 Python 訓練時的順序一致 (可參考 `train.py` 輸出或產生的 `classes.txt`)。
