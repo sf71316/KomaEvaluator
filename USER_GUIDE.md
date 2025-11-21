@@ -175,23 +175,35 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 
 **重要：預訓練權重下載**
 
-如果您使用 `convnext_v2_tiny_local` 或 `convnext_v2_base_local` 模型，您需要手動下載其預訓練權重並放置到指定目錄：
-
-1.  **下載 ConvNeXt V2 Tiny 權重**：請從官方來源下載 `convnextv2_tiny_1k_224_ema.pt`。
-
-2.  **放置路徑**：將下載的檔案放入 `DL_Output_Models/convnext_tiny/` 目錄。
-
-    *   如果 `convnext_tiny` 資料夾不存在，請手動建立。
+本系統支援 ConvNeXt V2 的所有變體 (Tiny, Base, Large 等)。請根據您的硬體資源選擇模型並下載對應權重：
 
 
 
-使用 `convnext_v2_tiny_local` 模型進行訓練，並啟用歷史紀錄功能。以下參數是經過優化的推薦設定：
+1.  **下載權重檔案**：
+
+    *   **Tiny (推薦)**: [convnextv2_tiny_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_tiny_1k_224_ema.pt)
+
+    *   **Base**: [convnextv2_base_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_base_1k_224_ema.pt)
+
+    *   **Large**: [convnextv2_large_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_large_1k_224_ema.pt)
+
+    *   *(更多版本請參考官方倉庫)*
 
 
+
+2.  **放置路徑**：將下載的檔案放入專案根目錄下的 `pretrained/` 資料夾中。
+
+    *   如果資料夾不存在，請手動建立。
+
+    *   *提示*: 您也可以使用 `--pretrained_path` 參數指定任意位置的權重檔。
+
+
+
+**執行訓練指令:**
 
 ```bash
 
-python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny_local --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
+python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
 
 ```
 
@@ -207,13 +219,22 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny_local --
 
 | `--data_dir` | 是 | `Manga_Dataset` | **訓練資料集目錄**。推薦使用合併後的 `Manga_Dataset_Mixed`。 |
 
-| `--model` | 否 | `efficientnet_b0` | **使用的模型架構**。推薦使用 `convnext_v2_tiny_local`。 |
+| `--model` | 否 | `efficientnet_b0` | **使用的模型架構**。支援動態名稱，如 `convnext_v2_tiny`, `convnext_v2_base`, `convnext_v2_large`。 |
+
+| `--pretrained_path` | 否 | `None` | **預訓練權重路徑**。若未指定，程式會自動嘗試從 `pretrained/{model_name}_1k_224_ema.pt` 載入。 |
+
 | `--epochs` | 否 | `20` | **訓練總輪數**。 |
+
 | `--batch_size` | 否 | `32` | **批次大小**。視顯存大小調整，越大越快但顯存需求越高。 |
+
 | `--lr` | 否 | `0.001` | **學習率**。ConvNeXt V2 推薦設為 `1.2e-4`。 |
+
 | `--save_path` | 否 | `final_model.pth` | **模型儲存檔案名稱**。將儲存在 `DL_Output_Models/[model_name]/` 下。 |
+
 | `--record_history` | 否 | `False` | **啟用歷史紀錄**。訓練成功後，將本次作者寫入 `trained_history.txt`。 |
+
 | `--amp` | 否 | `False` | **啟用混合精度訓練**。強烈建議開啟，可節省顯存並加速。 |
+
 | `--resume_path` | 否 | `None` | **恢復訓練的 Checkpoint 路徑**。用於中斷後繼續訓練。 |
 
 ### 4.2 中斷與恢復 (Checkpoint & Resume)

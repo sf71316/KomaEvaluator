@@ -412,6 +412,7 @@ def main():
 
     # Checkpoint & History
     parser.add_argument('--resume_path', type=str, default=None, help='恢復訓練的 Checkpoint 路徑')
+    parser.add_argument('--pretrained_path', type=str, default=None, help='指定預訓練權重路徑 (僅對 ConvNeXt V2 有效)')
     parser.add_argument('--history_file', type=str, default='trained_history.txt', help='訓練歷史紀錄檔案')
     parser.add_argument('--record_history', action='store_true', help='訓練完成後記錄作者到歷史檔案')
 
@@ -485,8 +486,6 @@ def main():
     
     # 模型初始化
     print(f"建立模型: {args.model}")
-    # ... (模型建立邏輯保持不變，這裡省略以節省 token，實際程式碼會包含完整的模型選擇)
-    # 為確保程式碼完整性，這裡必須包含模型建立的完整邏輯
     layer_decay = args.layer_decay # Local var for optimizer
     
     if args.model == 'resnet50':
@@ -495,11 +494,30 @@ def main():
     elif args.model == 'efficientnet_b0':
         model_ft = models.efficientnet_b0(weights='IMAGENET1K_V1')
         model_ft.classifier[1] = nn.Linear(model_ft.classifier[1].in_features, num_classes)
-    elif args.model == 'convnext_v2_tiny_local':
-        from models.convnextv2 import convnextv2_tiny
+    elif args.model.startswith('convnext_v2_'):
+        # 動態載入 ConvNeXt V2 變體
+        from models import convnextv2
         from utils import remap_checkpoint_keys
-        model_ft = convnextv2_tiny(num_classes=num_classes, drop_path_rate=args.drop_path)
-        pretrained_path = 'DL_Output_Models/convnext_tiny/convnextv2_tiny_1k_224_ema.pt'
+        
+        # 移除 _local 後綴 (如果是舊的命名習慣)
+        variant_name = args.model.replace('_local', '')
+        # 映射 convnext_v2_tiny -> convnextv2_tiny
+        func_name = variant_name.replace('convnext_v2_', 'convnextv2_')
+        
+        try:
+            model_fn = getattr(convnextv2, func_name)
+        except AttributeError:
+            raise ValueError(f"不支援的 ConvNeXt V2 變體: {args.model} (找不到函式 {func_name})")
+
+        model_ft = model_fn(num_classes=num_classes, drop_path_rate=args.drop_path)
+        
+        # 決定預訓練權重路徑
+        if args.pretrained_path:
+            pretrained_path = args.pretrained_path
+        else:
+            # 預設路徑: pretrained/convnextv2_tiny_1k_224_ema.pt
+            pretrained_path = f'pretrained/{func_name}_1k_224_ema.pt'
+
         if os.path.exists(pretrained_path):
             checkpoint = torch.load(pretrained_path, map_location='cpu')
             checkpoint_model = checkpoint['model']
@@ -511,9 +529,10 @@ def main():
                     if len(checkpoint_model[k].shape) == 6:
                         checkpoint_model[k] = checkpoint_model[k].squeeze(0).squeeze(0)
             model_ft.load_state_dict(checkpoint_model, strict=False)
-            print("Loaded ConvNeXt V2 Tiny weights.")
-    # ... (其他模型略，保持與原檔一致，若需完整請告知)
-    # 為了確保不破壞原本的程式碼，我這裡假設只用到了 convnext_v2_tiny_local 或 efficientnet
+            print(f"已載入預訓練權重: {pretrained_path}")
+        else:
+            print(f"警告: 找不到預訓練權重於 {pretrained_path}，將從頭開始訓練。")
+            print("提示: 您可以使用 --pretrained_path 指定權重檔案。")
     else:
         # Fallback for simple models
         try:
@@ -530,14 +549,13 @@ def main():
                   model_ft.head = nn.Linear(model_ft.head.in_features, num_classes)
         except:
              print(f"Warning: Could not auto-initialize model {args.model}. Please ensure full implementation.")
-             # In a real scenario, I would copy the full block from the original file.
              pass
 
     model_ft = model_ft.to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
 
     # 優化器
-    if 'convnext_v2' in args.model and not args.disable_llrd:
+    if args.model.startswith('convnext_v2_') and not args.disable_llrd:
         num_layers = sum(model_ft.depths)
         assigner = LayerDecayValueAssigner(
             list(layer_decay ** (num_layers + 1 - i) for i in range(num_layers + 2)),
