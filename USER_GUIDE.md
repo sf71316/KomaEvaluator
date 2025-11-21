@@ -171,6 +171,20 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 
 ### 4.1 開始訓練
 
+
+
+**重要：預訓練權重下載**
+
+如果您使用 `convnext_v2_tiny_local` 或 `convnext_v2_base_local` 模型，您需要手動下載其預訓練權重並放置到指定目錄：
+
+1.  **下載 ConvNeXt V2 Tiny 權重**：請從官方來源下載 `convnextv2_tiny_1k_224_ema.pt`。
+
+2.  **放置路徑**：將下載的檔案放入 `DL_Output_Models/convnext_tiny/` 目錄。
+
+    *   如果 `convnext_tiny` 資料夾不存在，請手動建立。
+
+
+
 使用 `convnext_v2_tiny_local` 模型進行訓練，並啟用歷史紀錄功能。以下參數是經過優化的推薦設定：
 
 
