@@ -82,8 +82,8 @@ MangaOriginalData/
 **指令範例:**
 ```bash
 python prepare_dataset.py \
-    --original_data_dir MangaOriginalData \
-    --target_dataset_dir Manga_Dataset_Clean \
+    --original_data_dir ./MangaOriginalData \
+    --target_dataset_dir ./Manga_Dataset_Clean \
     --num_samples_per_artist 400 \
     --whitelist whitelist.txt \
     --history trained_history.txt \
