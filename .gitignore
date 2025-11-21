@@ -1,0 +1,45 @@
+runs/
+# IDE and environment files
+.vs/
+.vscode/
+__pycache__/
+venv/
+
+# Dataset files
+Manga_Dataset_7_Artists/
+Manga_Dataset_Clean/
+Manga_Dataset_Faces/
+Manga_Dataset_Patches/
+Manga_Dataset_Mixed/
+MangaOriginalData/
+Intermediate_Faces/
+Intermediate_Patches/
+
+# Test Data & Artifacts
+Test_Source_10/
+Test_Dataset_Clean/
+Test_Dataset_Faces/
+Test_Dataset_Patches/
+Test_Dataset_Mixed/
+test_whitelist.txt
+test_history.txt
+
+# Local Configuration & History
+whitelist.txt
+trained_history.txt
+
+# Large Model Files
+DL_Output_Models/
+*.pth
+*.onnx
+
+# C# Projects (Excluded)
+CSharpPredict/
+
+# Temporary files
+temp_unzip/
+train_fixed.txt
+baseline_model.pth
+count_works.py
+download_weights.py
+efficientnet_model.onnx
