@@ -124,7 +124,7 @@ python prepare_dataset.py \
 3.  **資料集合併** (`merge_and_split.py`)
 
 ```bash
-python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 8 --target_count 400
+python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --target_count 400
 ```
 
 **參數說明:** 
@@ -133,7 +133,7 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 | :--- | :---: | :--- | :--- |
 | `--src_dir` | 否 | `Manga_Dataset_Clean` | **來源圖片目錄**。即上一步驟的產出。 |
 | `--output_dir` | 否 | `Manga_Dataset_Mixed` | **最終輸出目錄**。這將作為訓練的輸入。 |
-| `--num_workers` | 否 | `8` | **並行處理的進程數量**。 |
+| `--num_workers` | 否 | `4` | **並行處理的進程數量**。 |
 | `--target_count` | 否 | `400` | **每個畫師的目標特徵數量** (人臉與紋理各以此為目標)。 |
 | `--faces_dir` | 否 | `Intermediate_Faces` | **人臉特徵中間產出目錄**。 |
 | `--patches_dir` | 否 | `Intermediate_Patches` | **紋理特徵中間產出目錄**。 |
