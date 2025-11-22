@@ -182,14 +182,22 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny --epochs
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
 | `--data_dir` | 是 | `Manga_Dataset` | **訓練資料集目錄**。推薦使用合併後的 `Manga_Dataset_Mixed`。 |
-| `--model` | 否 | `convnext_v2_tiny` | **使用的模型架構**。支援動態名稱，如 `convnext_v2_tiny`, `convnext_v2_base`, `convnext_v2_large`。 |
-| `--pretrained_path` | 否 | `None` | **預訓練權重路徑**。若未指定，程式會自動嘗試從 `pretrained/{model_name}_1k_224_ema.pt` 載入。 |
+| `--model` | 否 | `efficientnet_b0` | **使用的模型架構**。支援動態名稱，如 `convnext_v2_tiny`, `convnext_v2_base`。 |
+| `--pretrained_path` | 否 | `None` | **預訓練權重路徑**。若未指定，程式會自動嘗試從 `pretrained/` 目錄搜尋。 |
 | `--epochs` | 否 | `20` | **訓練總輪數**。 |
 | `--batch_size` | 否 | `32` | **批次大小**。視顯存大小調整，越大越快但顯存需求越高。 |
 | `--lr` | 否 | `0.001` | **學習率**。ConvNeXt V2 推薦設為 `1.2e-4`。 |
-| `--save_path` | 否 | `final_model.pth` | **模型儲存檔案名稱**。將儲存在 `DL_Output_Models/[model_name]/` 下。 | `--record_history` | 否 | `False` | **啟用歷史紀錄**。訓練成功後，將本次作者寫入 `trained_history.txt`。 |
+| `--weight_decay` | 否 | `0.01` | **權重衰減**。用於防止過擬合，ConvNeXt V2 推薦設為 `0.05`。 |
+| `--drop_path` | 否 | `0.0` | **隨機深度率 (Drop Path)**。用於模型正則化，推薦設為 `0.2`。 |
+| `--label_smoothing` | 否 | `0.1` | **標籤平滑**。防止模型對預測過於自信，推薦設為 `0.1`。 |
+| `--warmup_epochs` | 否 | `0` | **熱身輪數**。在訓練初期線性增加學習率，推薦設為 `5`。 |
+| `--early_stopping_patience` | 否 | `7` | **提前停止耐心值**。若驗證損失在 N 輪內無改善則停止訓練。 |
+| `--save_path` | 否 | `final_model.pth` | **模型儲存檔案名稱**。將儲存在 `DL_Output_Models/[model_name]/` 下。 |
+| `--record_history` | 否 | `False` | **啟用歷史紀錄**。訓練成功後，將本次作者寫入 `trained_history.txt`。 |
+| `--history_file` | 否 | `trained_history.txt` | **歷史紀錄檔案路徑**。配合 `--record_history` 使用。 |
 | `--amp` | 否 | `False` | **啟用混合精度訓練**。強烈建議開啟，可節省顯存並加速。 |
 | `--resume_path` | 否 | `None` | **恢復訓練的 Checkpoint 路徑**。用於中斷後繼續訓練。 |
+| `--num_workers` | 否 | `0` | **資料載入執行緒**。在 Windows 上建議設為 `0` 以免報錯，Linux 可設為 `4` 或 `8`。 |
 
 
 ### 4.2 中斷與恢復 (Checkpoint & Resume)
