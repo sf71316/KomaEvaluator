@@ -12,223 +12,12 @@ import copy
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
 import shutil
-import urllib.request
-import zipfile
-import collections.abc # For torch._six replacement
-import types # For creating dummy modules
-
-# --- GLOBAL Monkey Patch: Fix for torch._six (Removed in newer PyTorch) ---
-# ConvNeXt V2 code uses: from torch._six import container_abcs, string_classes
-# We'll create a dummy torch._six module and inject replacements into sys.modules.
-if 'torch._six' not in sys.modules:
-    dummy_six_module = types.ModuleType('torch._six')
-    dummy_six_module.container_abcs = collections.abc
-    dummy_six_module.string_classes = (str, bytes)
-    # 由於 'inf' 也缺失，直接注入 float('inf')
-    dummy_six_module.inf = float('inf')
-    sys.modules['torch._six'] = dummy_six_module
-# --- End GLOBAL Monkey Patch ---
-
-# Mock MinkowskiEngine to avoid ImportError
-class MockSparseTensor:
-    pass
-
-class MockMinkowskiEngine:
-    SparseTensor = MockSparseTensor
-
-sys.modules['MinkowskiEngine'] = MockMinkowskiEngine()
-
-# Add submodule path
-sys.path.append('ConvNeXt_V2_Official')
-
-# 自動下載並解壓縮 ConvNeXt-V2 官方倉庫
-CONVNEXT_V2_REPO_URL = "https://github.com/facebookresearch/ConvNeXt-V2/archive/refs/heads/main.zip"
-CONVNEXT_V2_DIR = 'ConvNeXt_V2_Official'
-OPTIM_FACTORY_PATH = os.path.join(CONVNEXT_V2_DIR, 'optim_factory.py')
-
-def fix_torch_six_import(file_path):
-    """修復 ConvNeXt-V2 程式碼中對舊版 torch._six 的依賴"""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        
-        modified = False
-        new_lines = []
-        
-        # 替換邏輯 (根據常見的 _six 用法)
-        replacements = {
-            "from torch._six import container_abcs": "import collections.abc as container_abcs",
-            "from torch._six import string_classes": "import collections.abc as string_classes",
-            "string_classes": "(str, bytes)", # 實際使用時的替換
-            "container_abcs": "(list, tuple)", # 實際使用時的替換 (簡化處理)
-        }
-
-        for line in lines:
-            original_line = line
-            for old_str, new_str in replacements.items():
-                if old_str in line:
-                    line = line.replace(old_str, new_str)
-                    modified = True
-            new_lines.append(line)
-
-        if modified:
-            print(f"正在修復 {file_path} 中的 torch._six 匯入問題...")
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
-            print("修復完成。")
-
-    except Exception as e:
-        print(f"嘗試修復 {file_path} 失敗: {e}")
-
-def fix_optim_factory_import(file_path):
-    """修復 optim_factory.py 中舊版 timm 匯入 Nadam 的問題 (強健版)"""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        
-        modified = False
-        new_lines = []
-        
-        # 檢查是否已經修復過 (檢查是否有我們加入的標記)
-        if lines and "# --- Auto-fixed for timm compatibility ---" in lines[0]:
-            # print("optim_factory.py 已修復過。")
-            return
-
-        # 準備相容性區塊 (擴充版)
-        compatibility_block = [
-            "# --- Auto-fixed for timm compatibility ---\n",
-            "try:\n",
-            "    from timm.optim.nadam import Nadam\n",
-            "except ImportError:\n",
-            "    try:\n",
-            "        from torch.optim import Nadam\n",
-            "    except ImportError:\n",
-            "        pass # Nadam not available\n",
-            "\n",
-            "# Dummy classes for other missing optimizers to prevent name errors if used\n",
-            "class DummyOptimizer:\n",
-            "    pass\n",
-            "if 'NovoGrad' not in locals(): NovoGrad = DummyOptimizer\n",
-            "if 'Lookahead' not in locals(): Lookahead = DummyOptimizer\n",
-            "if 'RAdam' not in locals(): RAdam = DummyOptimizer\n",
-            "if 'Adafactor' not in locals(): Adafactor = DummyOptimizer\n",
-            "# -----------------------------------------\n"
-        ]
-        new_lines.extend(compatibility_block)
-
-        # 需要過濾的舊版 timm 模組
-        problematic_imports = [
-            "timm.optim.nadam",
-            "timm.optim.novograd",
-            "timm.optim.lookahead",
-            "timm.optim.radam",
-            "timm.optim.adafactor",
-            "timm.optim.sgdp",
-            "timm.optim.adamp",
-            "timm.optim.adabelief",
-        ]
-
-        for line in lines:
-            # 檢查是否包含有問題的匯入
-            hit = False
-            for bad_import in problematic_imports:
-                if bad_import in line and "import" in line:
-                    new_lines.append(f"# {line}") # Comment out
-                    modified = True
-                    print(f"已註解掉舊版匯入: {line.strip()}")
-                    hit = True
-                    break
-            
-            if not hit:
-                new_lines.append(line)
-        
-        if modified:
-            print(f"正在寫入修復後的 {file_path}...")
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
-            print("修復完成。")
-        else:
-            # 如果沒找到該行，可能是檔案結構不同，但我們還是寫入相容性區塊以防萬一
-            # 不過如果是第一次下載，通常都會有那一行
-            pass
-            
-    except Exception as e:
-        print(f"嘗試修復 optim_factory.py 失敗: {e}")
-
-if not os.path.exists(OPTIM_FACTORY_PATH):
-    print(f"偵測到 {CONVNEXT_V2_DIR} 資料夾內容缺失，正在嘗試自動下載並設置...")
-    zip_path = os.path.join(os.getcwd(), 'ConvNeXt-V2-main.zip')
-    extracted_dir_name = 'ConvNeXt-V2-main'
-
-    try:
-        # 1. 下載 ZIP 檔案
-        print(f"  正在從 {CONVNEXT_V2_REPO_URL} 下載...")
-        urllib.request.urlretrieve(CONVNEXT_V2_REPO_URL, zip_path)
-        print("  下載完成。")
-
-        # 2. 解壓縮
-        print(f"  正在解壓縮至 {CONVNEXT_V2_DIR}...")
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(os.getcwd())
-        
-        # 3. 移動內容到目標資料夾
-        if os.path.exists(CONVNEXT_V2_DIR): 
-            shutil.rmtree(CONVNEXT_V2_DIR)
-        shutil.move(extracted_dir_name, CONVNEXT_V2_DIR)
-        print(f"  資料夾 {CONVNEXT_V2_DIR} 設置成功！")
-
-    except Exception as e:
-        print("\n" + "!"*60)
-        print(f"自動下載和設置 {CONVNEXT_V2_DIR} 失敗: {e}")
-        print(f"請嘗試手動下載 {CONVNEXT_V2_REPO_URL}")
-        print(f"並將其解壓縮後，將內容移動到專案根目錄下的 {CONVNEXT_V2_DIR} 資料夾。")
-        print("!"*60 + "\n")
-        sys.exit(1)
-    finally:
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-
-    # 執行完下載和解壓縮後，進行通用修復
-    print("正在對 ConvNeXt_V2_Official 檔案進行兼容性修復...")
-    fix_optim_factory_import(OPTIM_FACTORY_PATH) # Nadam 修復
-    # 潛在受影響的檔案列表
-    files_to_patch = [
-        OPTIM_FACTORY_PATH,
-        os.path.join(CONVNEXT_V2_DIR, 'utils.py'),
-        os.path.join(CONVNEXT_V2_DIR, 'models', 'convnextv2.py')
-    ]
-    for f_path in files_to_patch:
-        if os.path.exists(f_path):
-            fix_torch_six_import(f_path)
-
-# 無論是否剛下載，都嘗試修復匯入問題 (針對現有但有問題的檔案)
-# 這裡的邏輯需要確保不會重複執行上面已經完成的步驟
-# 所以只處理那些可能未經上面區塊處理的場景（例如檔案已經存在但未被修復）
-if os.path.exists(OPTIM_FACTORY_PATH) and "# --- Auto-fixed for timm compatibility ---" not in open(OPTIM_FACTORY_PATH, 'r', encoding='utf-8').read():
-    print("偵測到 ConvNeXt_V2_Official 檔案需要二次修復...")
-    fix_optim_factory_import(OPTIM_FACTORY_PATH)
-    # 再次對可能受影響的檔案進行 torch._six 修復
-    files_to_patch = [
-        OPTIM_FACTORY_PATH,
-        os.path.join(CONVNEXT_V2_DIR, 'utils.py'),
-        os.path.join(CONVNEXT_V2_DIR, 'models', 'convnextv2.py')
-    ]
-    for f_path in files_to_patch:
-        if os.path.exists(f_path):
-            fix_torch_six_import(f_path)
-
-
-try:
-    from optim_factory import create_optimizer, LayerDecayValueAssigner
-    import utils
-except ImportError as e:
-    print(f"匯入錯誤: {e}。請確認 {CONVNEXT_V2_DIR} 資料夾內容完整。")
-    sys.exit(1)
-
-from torchvision import datasets, models, transforms
-
-# Import ModelEmaV2
+import timm 
 from timm.utils import ModelEmaV2
+
+# ==============================================================================
+# Helper Functions
+# ==============================================================================
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
@@ -262,13 +51,12 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, scaler=None, e
     print(f"正在載入 Checkpoint: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     
-    # 載入模型權重 (處理 keys 不匹配和形狀不匹配)
     state_dict = checkpoint['model_state_dict']
-    # 移除 module. 前綴
+    # Remove module. prefix if needed
     if list(state_dict.keys())[0].startswith('module.') and not list(model.state_dict().keys())[0].startswith('module.'):
         state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
         
-    # 過濾掉形狀不匹配的層 (通常是 Head 層，因為類別數改變)
+    # Handle shape mismatch (e.g., for incremental training with new classes)
     model_state_dict = model.state_dict()
     filtered_state_dict = {}
     for k, v in state_dict.items():
@@ -278,30 +66,26 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, scaler=None, e
             else:
                 print(f"  警告: 跳過載入層 '{k}'，因為形狀不匹配 (Checkpoint: {v.shape}, Model: {model_state_dict[k].shape})")
         else:
-             # 可能是模型架構微調導致 key 不存在，安全跳過
-             pass
+             pass # Skip missing keys
              
     model.load_state_dict(filtered_state_dict, strict=False)
 
-    # 只有在形狀完全匹配時才載入 optimizer 和 scheduler
-    # 如果 head 層變了，optimizer 狀態也對不上了，通常建議重置 optimizer
-    # 這裡做一個簡單判斷：如果過濾掉的 keys 超過一定數量，就不載入 optimizer
+    # Only load optimizer if fully matched
     if len(filtered_state_dict) == len(state_dict):
         print("  完整恢復 Optimizer 和 Scheduler 狀態")
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        if scaler and 'scaler_state_dict' in checkpoint:
-            scaler.load_state_dict(checkpoint['scaler_state_dict'])
+        try:
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            if scaler and 'scaler_state_dict' in checkpoint:
+                scaler.load_state_dict(checkpoint['scaler_state_dict'])
+        except Exception as e:
+            print(f"  警告: 載入優化器狀態失敗 ({e})，將使用新初始化的優化器。")
     else:
-        print("  警告: 由於模型結構改變 (如類別數增加)，跳過載入 Optimizer/Scheduler/Scaler 狀態，將使用新初始化的優化器。")
+        print("  警告: 由於模型結構改變，跳過載入 Optimizer/Scheduler/Scaler 狀態。 সন")
 
     if ema_model and 'ema_model_state_dict' in checkpoint:
-        # EMA 同樣需要過濾
-        ema_state_dict = checkpoint['ema_model_state_dict']
-        ema_model_dict = ema_model.state_dict() # 注意: ModelEmaV2 的 state_dict 結構可能不同
-        # 這裡簡化處理，如果 EMA 結構變了，可能比較難完美恢復，嘗試 best effort
         try:
-             ema_model.load_state_dict(ema_state_dict, strict=False)
+             ema_model.load_state_dict(checkpoint['ema_model_state_dict'], strict=False)
         except:
              print("  警告: 無法完全恢復 EMA 模型狀態")
         
@@ -315,7 +99,6 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, scaler=None, e
 def update_trained_history(history_file, class_names):
     print(f"正在更新訓練歷史紀錄至 {history_file} ...")
     existing_history = set()
-    
     if os.path.exists(history_file):
         try:
             with open(history_file, 'r', encoding='utf-8') as f:
@@ -327,7 +110,6 @@ def update_trained_history(history_file, class_names):
             print(f"讀取歷史檔案失敗: {e}")
 
     new_classes = [c for c in class_names if c not in existing_history]
-    
     if new_classes:
         try:
             with open(history_file, 'a', encoding='utf-8') as f:
@@ -335,29 +117,25 @@ def update_trained_history(history_file, class_names):
                 f.write(f"\n# --- [{timestamp}] Training Session ---\n")
                 for c in new_classes:
                     f.write(f"{c}\n")
-            print(f"已新增 {len(new_classes)} 位作者到歷史紀錄。")
+            print(f"已新增 {len(new_classes)} 位作者到歷史紀錄。 সন")
         except Exception as e:
             print(f"寫入歷史檔案失敗: {e}")
     else:
-        print("沒有新的作者需要記錄。")
+        print("沒有新的作者需要記錄。 সন")
 
 def build_resume_command(checkpoint_path):
-    """
-    根據 sys.argv 重建命令，並將 --resume_path 參數插入或替換。
-    """
     args = sys.argv[:]
-    
-    # 確保 python 執行緒
     cmd = ["python"] + args
-    
-    # 檢查是否已經有 --resume_path
     if '--resume_path' in cmd:
         idx = cmd.index('--resume_path')
-        cmd[idx + 1] = checkpoint_path # 替換路徑
+        cmd[idx + 1] = checkpoint_path
     else:
-        cmd.extend(['--resume_path', checkpoint_path]) # 新增參數
-        
+        cmd.extend(['--resume_path', checkpoint_path])
     return " ".join(cmd)
+
+# ==============================================================================
+# Augmentation Logic (Mixup/Cutmix)
+# ==============================================================================
 
 def mixup_data(x, y, alpha=1.0, device='cuda'):
     if alpha > 0:
@@ -400,11 +178,13 @@ def rand_bbox(size, lam):
     bby2 = np.clip(cy + cut_h // 2, 0, H)
     return bbx1, bby1, bbx2, bby2
 
+# ==============================================================================
+# Training Loop
+# ==============================================================================
+
 def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writer, args, start_epoch=0, best_acc=0.0, best_loss=float('inf'), scaler=None, ema_model=None, device='cuda:0'):
     since = time.time()
     epochs = args.epochs
-    
-    # 提取常用參數
     accumulation_steps = args.accumulation_steps
     early_stopping_patience = args.early_stopping_patience
     early_stopping_delta = args.early_stopping_delta
@@ -414,7 +194,7 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
     cutmix_alpha = args.cutmix_alpha
     use_amp = args.amp
     use_bf16 = args.bf16
-    checkpoint_dir = os.path.dirname(args.save_path) # 假設 save_path 是完整路徑，Checkpoint 存同一目錄
+    checkpoint_dir = os.path.dirname(args.save_path)
     if not checkpoint_dir: checkpoint_dir = '.'
 
     epochs_no_improve = 0
@@ -434,7 +214,6 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
 
                 running_loss = 0.0
                 running_corrects = 0
-                # Top-5 計算需要
                 running_corrects_top5 = 0
                 
                 optimizer.zero_grad(set_to_none=True)
@@ -444,7 +223,6 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
                     inputs = inputs.to(device, non_blocking=True)
                     labels = labels.to(device, non_blocking=True)
 
-                    # Mixup/Cutmix logic
                     mixed = False
                     lam = 1.0
                     if phase == 'train':
@@ -483,23 +261,19 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
                             if ema_model is not None:
                                 ema_model.update(model)
 
-                    # Statistics
                     batch_size = inputs.size(0)
                     running_loss += loss.item() * batch_size * (accumulation_steps if phase == 'train' else 1)
                     
                     if not mixed:
-                        # Top-1 & Top-5 Accuracy
                         res = accuracy(outputs, labels, topk=(1, 5))
                         running_corrects += res[0].item() * batch_size / 100
                         running_corrects_top5 += res[1].item() * batch_size / 100
                     else:
-                        # Approximate Top-1 for Mixup
                         _, preds = torch.max(outputs, 1)
                         if lam > 0.5:
                             running_corrects += torch.sum(preds == labels_a.data)
                         else:
                             running_corrects += torch.sum(preds == labels_b.data)
-                        # Mixup Top-5 is complex, skip or approximate
 
                 epoch_loss = running_loss / dataset_sizes[phase]
                 epoch_acc = running_corrects / dataset_sizes[phase]
@@ -513,7 +287,6 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
                     writer.add_scalar('Accuracy/val_top1', epoch_acc, epoch)
                     writer.add_scalar('Accuracy/val_top5', epoch_acc_top5, epoch)
 
-                    # Save Checkpoint (Last)
                     checkpoint = {
                         'epoch': epoch + 1,
                         'model_state_dict': model.state_dict(),
@@ -554,7 +327,7 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
     except KeyboardInterrupt:
         print("\n\n[使用者中斷] 正在儲存 Checkpoint 並安全退出...")
         checkpoint = {
-            'epoch': epoch, # 記錄中斷時的 epoch
+            'epoch': epoch,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': exp_lr_scheduler.state_dict(),
@@ -570,7 +343,6 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
         checkpoint_path = os.path.join(checkpoint_dir, save_filename)
         resume_cmd = build_resume_command(checkpoint_path)
         
-        # 自動產生恢復腳本
         is_windows = os.name == 'nt'
         script_ext = 'bat' if is_windows else 'sh'
         script_name = f'resume_training.{script_ext}'
@@ -581,9 +353,8 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
             f.write(resume_cmd)
             f.write("\n")
             if is_windows:
-                f.write("pause") # Windows 上執行完暫停，讓使用者看結果
+                f.write("pause")
         
-        #賦予執行權限 (Linux/Mac)
         if not is_windows:
             os.chmod(script_name, 0o755)
 
@@ -602,18 +373,19 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
     model.load_state_dict(best_model_wts)
     return model
 
-import shutil
+# ==============================================================================
+# Main Function
+# ==============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description='漫畫家畫風分類模型訓練 (支援 Checkpoint 與 History)')
+    parser = argparse.ArgumentParser(description='漫畫家畫風分類模型訓練 (基於 timm)')
     parser.add_argument('--data_dir', type=str, default='Manga_Dataset', help='資料集路徑')
-    parser.add_argument('--model', type=str, default='convnext_v2_tiny', help='模型名稱')
+    parser.add_argument('--model', type=str, default='convnextv2_tiny', help='timm 模型名稱')
     parser.add_argument('--save_path', type=str, default='final_model.pth', help='儲存模型權重的檔案名稱 (相對路徑)')
     parser.add_argument('--lr', type=float, default=0.001, help='學習率')
     parser.add_argument('--batch_size', type=int, default=32, help='批次大小')
     parser.add_argument('--num_workers', type=int, default=0, help='資料載入的執行緒數量')
     parser.add_argument('--epochs', type=int, default=20, help='訓練輪數')
-    parser.add_argument('--opt', type=str, default='adamw', help='優化器')
     parser.add_argument('--label_smoothing', type=float, default=0.1, help='標籤平滑')
     parser.add_argument('--weight_decay', type=float, default=0.01, help='權重衰減')
     parser.add_argument('--drop_path', type=float, default=0.0, help='隨機深度率')
@@ -624,12 +396,8 @@ def main():
     parser.add_argument('--mixup_alpha', type=float, default=0.2, help='Mixup alpha')
     parser.add_argument('--use_cutmix', action='store_true', help='啟用 Cutmix')
     parser.add_argument('--cutmix_alpha', type=float, default=0.4, help='Cutmix alpha')
-    parser.add_argument('--load_path', type=str, default=None, help='預載入模型權重路徑 (只載入權重)')
     
-    # ConvNeXt V2 Specific
-    parser.add_argument('--disable_llrd', action='store_true', help='停用 LLRD')
-    parser.add_argument('--layer_decay', type=float, default=0.7, help='LLRD 衰減率')
-    
+    # 這些參數現在由 timm 處理或簡化
     parser.add_argument('--warmup_epochs', type=int, default=0, help='Warmup 輪數')
     parser.add_argument('--amp', action='store_true', help='啟用 AMP 混合精度')
     parser.add_argument('--bf16', action='store_true', help='啟用 BF16')
@@ -638,32 +406,29 @@ def main():
 
     # Checkpoint & History
     parser.add_argument('--resume_path', type=str, default=None, help='恢復訓練的 Checkpoint 路徑')
-    parser.add_argument('--pretrained_path', type=str, default=None, help='指定預訓練權重路徑 (僅對 ConvNeXt V2 有效)')
+    parser.add_argument('--load_path', type=str, default=None, help='載入模型權重路徑 (如增量訓練)')
+    parser.add_argument('--pretrained_path', type=str, default=None, help='指定本地預訓練權重路徑 (若不指定則使用 timm 預設)')
     parser.add_argument('--history_file', type=str, default='trained_history.txt', help='訓練歷史紀錄檔案')
     parser.add_argument('--record_history', action='store_true', help='訓練完成後記錄作者到歷史檔案')
 
     args = parser.parse_args()
 
+    from torchvision import datasets, transforms
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"使用裝置: {device}")
 
-    # 設定輸出與 Checkpoint 目錄 
-    # save_path 例如: DL_Output_Models/convnext_v2/model.pth
-    # 如果使用者只給 model.pth，我們預設放到 DL_Output_Models/model_name/ 下
     if os.path.dirname(args.save_path):
         full_save_path = args.save_path
     else:
         full_save_path = os.path.join('DL_Output_Models', args.model, args.save_path)
     
-    # 更新 args.save_path 為完整路徑，方便後面使用
     args.save_path = full_save_path
     checkpoint_dir = os.path.dirname(full_save_path)
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # 初始 TensorBoard
     writer = SummaryWriter(f'runs/{args.model}_{time.strftime("%Y%m%d-%H%M%S")}')
 
-    # 資料準備
     data_transforms = {
         'train': transforms.Compose([
             transforms.Resize((224, 224)),
@@ -699,113 +464,53 @@ def main():
     
     class_names = image_datasets['train'].classes
     num_classes = len(class_names)
-
     print(f"類別數量: {num_classes}")
     
-    # 資料集大小與超參數微調
     num_train_samples = len(image_datasets['train'])
     if num_train_samples < 1000:
-        print("小型資料集模式: 自動調整超參數 (Lr, DropPath, LayerDecay)")
+        print("小型資料集模式: 自動調整超參數 (Lr, DropPath)")
         if args.lr == 0.001: args.lr = 0.00005
         if args.drop_path == 0.0: args.drop_path = 0.2
-        if args.layer_decay == 0.7: args.layer_decay = 0.8
     
-    # 模型初始化
+    # --- 模型初始化 (使用 timm) ---
     print(f"建立模型: {args.model}")
-    layer_decay = args.layer_decay # Local var for optimizer
     
-    if args.model == 'resnet50':
-        model_ft = models.resnet50(weights='IMAGENET1K_V1')
-        model_ft.fc = nn.Linear(model_ft.fc.in_features, num_classes)
-    elif args.model == 'efficientnet_b0':
-        model_ft = models.efficientnet_b0(weights='IMAGENET1K_V1')
-        model_ft.classifier[1] = nn.Linear(model_ft.classifier[1].in_features, num_classes)
-    elif args.model.startswith('convnext_v2_'):
-        # 動態載入 ConvNeXt V2 變體
-        from models import convnextv2
-        from utils import remap_checkpoint_keys
+    # 轉換舊習慣的名稱 (e.g. convnext_v2_tiny -> convnextv2_tiny)
+    timm_model_name = args.model.replace('_local', '').replace('convnext_v2_', 'convnextv2_')
+    
+    try:
+        # 是否使用 timm 線上預訓練權重
+        use_timm_pretrained = True if args.pretrained_path is None else False
         
-        # 移除 _local 後綴 (如果是舊的命名習慣)
-        variant_name = args.model.replace('_local', '')
-        # 映射 convnext_v2_tiny -> convnextv2_tiny
-        func_name = variant_name.replace('convnext_v2_', 'convnextv2_')
+        model_ft = timm.create_model(
+            timm_model_name,
+            pretrained=use_timm_pretrained,
+            num_classes=num_classes,
+            drop_path_rate=args.drop_path
+        )
+        print(f"成功使用 timm 建立模型: {timm_model_name} (Pretrained={use_timm_pretrained})")
         
-        try:
-            model_fn = getattr(convnextv2, func_name)
-        except AttributeError:
-            raise ValueError(f"不支援的 ConvNeXt V2 變體: {args.model} (找不到函式 {func_name})")
-
-        model_ft = model_fn(num_classes=num_classes, drop_path_rate=args.drop_path)
-        
-        # 決定預訓練權重路徑
+        # 如果指定了本地權重，手動載入
         if args.pretrained_path:
-            pretrained_path = args.pretrained_path
-        else:
-            # 自動搜尋 pretrained 目錄下的權重檔
-            # 規則：檔名以模型名稱開頭 (如 convnextv2_tiny)，且副檔名為 .pt 或 .pth
-            search_dir = 'pretrained'
-            pretrained_path = None
-            if os.path.exists(search_dir):
-                candidates = [f for f in os.listdir(search_dir) if f.startswith(func_name) and f.endswith(('.pt', '.pth'))]
-                if candidates:
-                    # 排序以確保確定性 (例如選最新的或最短的)，這裡選字母順序第一個
-                    candidates.sort()
-                    pretrained_path = os.path.join(search_dir, candidates[0])
-                    if len(candidates) > 1:
-                        print(f"提示: 找到多個可能的權重檔，使用第一個: {pretrained_path}")
-            
-            # 如果沒找到，回退到預設檔名以顯示明確的錯誤訊息
-            if not pretrained_path:
-                pretrained_path = f'pretrained/{func_name}_1k_224_ema.pt'
+            if os.path.exists(args.pretrained_path):
+                print(f"正在載入指定預訓練權重: {args.pretrained_path}")
+                checkpoint = torch.load(args.pretrained_path, map_location='cpu')
+                state_dict = checkpoint['model'] if 'model' in checkpoint else checkpoint
+                msg = model_ft.load_state_dict(state_dict, strict=False)
+                print(f"權重載入結果: {msg}")
+            else:
+                print(f"警告: 找不到指定的權重檔 {args.pretrained_path}，使用隨機初始化。 সন")
 
-        if os.path.exists(pretrained_path):
-            checkpoint = torch.load(pretrained_path, map_location='cpu')
-            checkpoint_model = checkpoint['model']
-            for k in ['head.weight', 'head.bias']:
-                if k in checkpoint_model: del checkpoint_model[k]
-            checkpoint_model = remap_checkpoint_keys(checkpoint_model)
-            for k in list(checkpoint_model.keys()):
-                if "grn.gamma" in k or "grn.beta" in k:
-                    if len(checkpoint_model[k].shape) == 6:
-                        checkpoint_model[k] = checkpoint_model[k].squeeze(0).squeeze(0)
-            model_ft.load_state_dict(checkpoint_model, strict=False)
-            print(f"已載入預訓練權重: {pretrained_path}")
-        else:
-            print(f"警告: 找不到預訓練權重於 {pretrained_path}，將從頭開始訓練。")
-            print("提示: 您可以使用 --pretrained_path 指定權重檔案。")
-    else:
-        # Fallback for simple models
-        try:
-             model_ft = getattr(models, args.model)(weights='IMAGENET1K_V1')
-             # Try to find the last layer
-             if hasattr(model_ft, 'fc'):
-                 model_ft.fc = nn.Linear(model_ft.fc.in_features, num_classes)
-             elif hasattr(model_ft, 'classifier'):
-                 if isinstance(model_ft.classifier, nn.Sequential):
-                      model_ft.classifier[-1] = nn.Linear(model_ft.classifier[-1].in_features, num_classes)
-                 else:
-                      model_ft.classifier = nn.Linear(model_ft.classifier.in_features, num_classes)
-             elif hasattr(model_ft, 'head'):
-                  model_ft.head = nn.Linear(model_ft.head.in_features, num_classes)
-        except:
-             print(f"Warning: Could not auto-initialize model {args.model}. Please ensure full implementation.")
-             pass
+    except Exception as e:
+        print(f"timm 建立模型失敗: {e}")
+        print("請確認模型名稱是否正確 (參考 timm.list_models())")
+        sys.exit(1)
 
     model_ft = model_ft.to(device)
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
 
-    # 優化器
-    if args.model.startswith('convnext_v2_') and not args.disable_llrd:
-        num_layers = sum(model_ft.depths)
-        assigner = LayerDecayValueAssigner(
-            list(layer_decay ** (num_layers + 1 - i) for i in range(num_layers + 2)),
-            depths=model_ft.depths, layer_decay_type='single')
-        optimizer_ft = create_optimizer(
-            args, model_ft, skip_list=None,
-            get_num_layer=assigner.get_layer_id,
-            get_layer_scale=assigner.get_scale)
-    else:
-        optimizer_ft = optim.AdamW(model_ft.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # 優化器 (AdamW)
+    optimizer_ft = optim.AdamW(model_ft.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # EMA
     ema_model = None
@@ -824,10 +529,9 @@ def main():
     else:
         exp_lr_scheduler = lr_scheduler.CosineAnnealingLR(optimizer_ft, T_max=args.epochs, eta_min=args.lr * 1e-6)
 
-    # Scaler
     scaler = GradScaler(enabled=(args.amp and not args.bf16))
 
-    # Checkpoint 恢復邏輯
+    # Resume / Load Weights
     start_epoch = 0
     best_acc = 0.0
     best_loss = float('inf')
@@ -836,9 +540,12 @@ def main():
         start_epoch, best_acc, best_loss = load_checkpoint(
             args.resume_path, model_ft, optimizer_ft, exp_lr_scheduler, scaler, ema_model, device
         )
-        # 確保從下一輪開始
         start_epoch += 1
         print(f"恢復訓練自 Epoch {start_epoch}")
+    elif args.load_path:
+        print(f"載入權重自: {args.load_path}")
+        load_checkpoint(args.load_path, model_ft, optimizer_ft, exp_lr_scheduler, scaler, ema_model, device)
+        print("權重載入完成 (僅權重)")
 
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=args.batch_size, shuffle=True if x == 'train' else False, num_workers=args.num_workers, pin_memory=True) for x in ['train', 'val', 'test']}
 
@@ -850,13 +557,12 @@ def main():
         scaler=scaler, ema_model=ema_model, device=device
     )
 
-    # 儲存最終模型
+    # 儲存結果
     torch.save(model_ft.state_dict(), full_save_path)
     print(f"最終模型已儲存至 {full_save_path}")
     if ema_model:
         torch.save(ema_model.module.state_dict(), full_save_path.replace('.pth', '_ema.pth'))
 
-    # 記錄歷史
     if args.record_history:
         update_trained_history(args.history_file, class_names)
 
