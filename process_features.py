@@ -46,8 +46,8 @@ def main():
             '--src_dir', args.src_dir,
             '--dst_dir', args.faces_dir,
             '--num_workers', args.num_workers,
-            '--cascade', args.cascade,
-            '--target_count', args.target_count
+            '--cascade', args.cascade
+            # 移除 target_count，不再此階段平衡
         ]
         if not run_command(cmd_faces):
             print("人臉裁切失敗，流程終止。")
@@ -63,7 +63,7 @@ def main():
             '--src_dir', args.src_dir,
             '--dst_dir', args.patches_dir,
             '--num_workers', args.num_workers,
-            '--target_count', args.target_count,
+            '--target_count', args.target_count, # 這裡保留，作為生成上限
             '--patch_size', args.patch_size
         ]
         if not run_command(cmd_patches):
@@ -82,14 +82,11 @@ def main():
     if not args.skip_patches and os.path.exists(args.patches_dir):
         dirs_to_merge.append(args.patches_dir)
         
-    # 如果使用者跳過了某些步驟，但目錄其實存在，也應該允許合併嗎？
-    # 這裡假設使用者如果沒跳過，就一定想合併新產生的。如果跳過了，但想合併舊的，手動檢查目錄是否存在。
     if args.skip_faces and os.path.exists(args.faces_dir):
          dirs_to_merge.append(args.faces_dir)
     if args.skip_patches and os.path.exists(args.patches_dir):
          dirs_to_merge.append(args.patches_dir)
     
-    # 去重
     dirs_to_merge = list(set(dirs_to_merge))
 
     if not dirs_to_merge:
@@ -102,6 +99,7 @@ def main():
         '--dst_dir', args.output_dir,
         '--val_ratio', '0.15',
         '--test_ratio', '0.15'
+        # merge_and_split.py 會自動執行平衡
     ]
     
     if not run_command(cmd_merge):
@@ -113,8 +111,6 @@ def main():
     print(f"最終資料集位於: {args.output_dir}")
     print("接下來，請執行訓練指令：")
     
-    # 智慧提示：檢查是否有舊模型可以接續
-    # 假設預設模型目錄結構
     possible_checkpoint = os.path.join('DL_Output_Models', 'convnext_v2_tiny_local', 'checkpoint_last.pth')
     possible_model = os.path.join('DL_Output_Models', 'convnext_v2_tiny_local', 'final_model.pth')
     

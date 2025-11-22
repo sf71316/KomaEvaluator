@@ -5,7 +5,6 @@ import numpy as np
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
-import random
 import shutil
 
 def process_single_image(args):
@@ -53,7 +52,7 @@ def process_single_image(args):
             
             face_img = img[y1:y2, x1:x2]
             
-            # 確保輸出目錄存在 (多進程可能會有 race condition，但 os.makedirs exist_ok=True 通常安全)
+            # 確保輸出目錄存在
             os.makedirs(dst_subdir, exist_ok=True)
             
             save_name = f"{filename_no_ext}_face_{i}.jpg"
@@ -67,63 +66,7 @@ def process_single_image(args):
         return saved_count
         
     except Exception as e:
-        # print(f"Error processing {src_path}: {e}")
         return 0
-
-def balance_dataset(dst_dir, target_count, tolerance):
-    """
-    裁切完成後，檢查數量並進行平衡 (刪除多餘的)
-    """
-    print(f"\n正在平衡資料集 (目標: {target_count}, 容錯: {tolerance})...")
-    
-    # 統計目前的數量
-    artist_counts = defaultdict(int)
-    artist_files = defaultdict(list)
-    
-    for root, dirs, files in os.walk(dst_dir):
-        artist_name = os.path.basename(root)
-        if root == dst_dir: continue
-        
-        for file in files:
-            if file.lower().endswith('.jpg'):
-                artist_counts[artist_name] += 1
-                artist_files[artist_name].append(os.path.join(root, file))
-    
-    if not artist_counts:
-        print("  無資料可平衡。")
-        return
-
-    # 找出最小值 (作為潛在的限制)
-    min_count = min(artist_counts.values())
-    threshold = target_count * (1 - tolerance)
-    
-    print(f"  最少數量: {min_count}, 門檻: {threshold}")
-    
-    # 決定最終目標數量
-    final_limit = target_count
-    if min_count < threshold:
-        print(f"  >> 警告: 最少數量 ({min_count}) 低於容錯門檻。將統一降級至 {min_count} 張。")
-        final_limit = min_count
-    elif min_count < target_count:
-        print(f"  >> 注意: 最少數量 ({min_count}) 未達目標但可接受。")
-    
-    # 執行刪除
-    for artist, files in artist_files.items():
-        count = len(files)
-        if count > final_limit:
-            files_to_remove = count - final_limit
-            print(f"  - {artist}: {count} 張 -> 刪除 {files_to_remove} 張以平衡至 {final_limit}")
-            
-            # 隨機選擇要刪除的檔案
-            random.shuffle(files)
-            remove_list = files[:files_to_remove]
-            for f in remove_list:
-                try:
-                    os.remove(f)
-                except OSError as e:
-                    print(f"    刪除失敗 {f}: {e}")
-        else:
-             print(f"  - {artist}: {count} 張 (保留)")
 
 def main():
     parser = argparse.ArgumentParser(description='多進程動漫人臉裁切工具 (v2)')
@@ -131,8 +74,6 @@ def main():
     parser.add_argument('--dst_dir', required=True, help='輸出目錄')
     parser.add_argument('--cascade', default='lbpcascade_animeface.xml')
     parser.add_argument('--num_workers', type=int, default=os.cpu_count(), help='進程數量')
-    parser.add_argument('--target_count', type=int, default=None, help='目標數量 (若設定，將在裁切後執行平衡)')
-    parser.add_argument('--tolerance', type=float, default=0.2, help='平衡容錯率')
     
     # 裁切參數
     parser.add_argument('--padding', type=float, default=0.2)
@@ -151,7 +92,6 @@ def main():
     tasks = []
     
     for root, dirs, files in os.walk(args.src_dir):
-        artist_name = os.path.basename(root)
         # 簡單判斷是否在 artist 資料夾層級
         if root == args.src_dir: 
             continue
@@ -177,10 +117,7 @@ def main():
             total_faces += future.result()
             
     print(f"\n裁切完成！共提取 {total_faces} 張人臉。")
-    
-    # 3. (可選) 執行平衡
-    if args.target_count:
-        balance_dataset(args.dst_dir, args.target_count, args.tolerance)
+    print("注意：此階段不進行數量平衡，將保留所有裁切到的人臉。")
 
 if __name__ == '__main__':
     main()
