@@ -11,6 +11,9 @@ import argparse
 import copy
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
+import shutil # 用於下載檔案
+import urllib.request # 用於下載檔案
+import zipfile # 用於解壓縮檔案
 
 # Mock MinkowskiEngine to avoid ImportError
 class MockSparseTensor:
@@ -24,28 +27,54 @@ sys.modules['MinkowskiEngine'] = MockMinkowskiEngine()
 # Add submodule path
 sys.path.append('ConvNeXt_V2_Official')
 
-# Check and auto-initialize submodule
-if not os.path.exists(os.path.join('ConvNeXt_V2_Official', 'optim_factory.py')):
-    print("偵測到 'ConvNeXt_V2_Official' 子模組缺失，正在嘗試自動初始化...")
+# 自動下載並解壓縮 ConvNeXt-V2 官方倉庫
+CONVNEXT_V2_REPO_URL = "https://github.com/facebookresearch/ConvNeXt-V2/archive/refs/heads/main.zip"
+CONVNEXT_V2_DIR = 'ConvNeXt_V2_Official'
+OPTIM_FACTORY_PATH = os.path.join(CONVNEXT_V2_DIR, 'optim_factory.py')
+
+if not os.path.exists(OPTIM_FACTORY_PATH):
+    print(f"偵測到 {CONVNEXT_V2_DIR} 資料夾內容缺失，正在嘗試自動下載並設置...")
+    zip_path = os.path.join(os.getcwd(), 'ConvNeXt-V2-main.zip')
+    extracted_dir_name = 'ConvNeXt-V2-main'
+
     try:
-        import subprocess
-        subprocess.check_call(['git', 'submodule', 'update', '--init', '--recursive'])
-        print("子模組初始化成功！")
+        # 1. 下載 ZIP 檔案
+        print(f"  正在從 {CONVNEXT_V2_REPO_URL} 下載...")
+        urllib.request.urlretrieve(CONVNEXT_V2_REPO_URL, zip_path)
+        print("  下載完成。")
+
+        # 2. 解壓縮
+        print(f"  正在解壓縮至 {CONVNEXT_V2_DIR}...")
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(os.getcwd())
+        
+        # 3. 移動內容到目標資料夾
+        # 解壓後通常會產生一個 ConvNeXt-V2-main 的資料夾，我們需要將其內容移動到 ConvNeXt_V2_Official
+        if os.path.exists(CONVNEXT_V2_DIR): # 如果 ConvNeXt_V2_Official 已存在，先清空
+            shutil.rmtree(CONVNEXT_V2_DIR)
+        shutil.move(extracted_dir_name, CONVNEXT_V2_DIR)
+        print(f"  資料夾 {CONVNEXT_V2_DIR} 設置成功！")
+
     except Exception as e:
         print("\n" + "!"*60)
-        print(f"自動初始化失敗: {e}")
-        print("請嘗試手動執行: git submodule update --init --recursive")
-        print("或者確認您已安裝 Git 並網路連線正常。")
+        print(f"自動下載和設置 {CONVNEXT_V2_DIR} 失敗: {e}")
+        print(f"請嘗試手動下載 {CONVNEXT_V2_REPO_URL}")
+        print(f"並將其解壓縮後，將內容移動到專案根目錄下的 {CONVNEXT_V2_DIR} 資料夾。")
         print("!"*60 + "\n")
         sys.exit(1)
+    finally:
+        # 清理下載的 ZIP 檔案
+        if os.path.exists(zip_path):
+            os.remove(zip_path)
 
-from torchvision import datasets, models, transforms
 try:
     from optim_factory import create_optimizer, LayerDecayValueAssigner
     import utils
 except ImportError as e:
-    print(f"匯入錯誤: {e}")
+    print(f"匯入錯誤: {e}。請確認 {CONVNEXT_V2_DIR} 資料夾內容完整。")
     sys.exit(1)
+
+from torchvision import datasets, models, transforms
 
 # Import ModelEmaV2
 from timm.utils import ModelEmaV2
