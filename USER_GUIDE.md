@@ -124,7 +124,7 @@ python prepare_dataset.py \
 3.  **資料集合併** (`merge_and_split.py`)
 
 ```bash
-python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --target_count 400
+python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 8 --target_count 400 --patch_size 224 --cascade lbpcascade_animeface.xml
 ```
 
 **參數說明:** 
