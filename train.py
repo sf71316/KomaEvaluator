@@ -32,6 +32,29 @@ CONVNEXT_V2_REPO_URL = "https://github.com/facebookresearch/ConvNeXt-V2/archive/
 CONVNEXT_V2_DIR = 'ConvNeXt_V2_Official'
 OPTIM_FACTORY_PATH = os.path.join(CONVNEXT_V2_DIR, 'optim_factory.py')
 
+def fix_optim_factory_import(file_path):
+    """修復 optim_factory.py 中舊版 timm 匯入 Nadam 的問題"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # 檢查是否需要修復
+        old_import = "from timm.optim.nadam import Nadam"
+        new_import = "try:\n    from timm.optim.nadam import Nadam\nexcept ImportError:\n    from torch.optim import Nadam"
+        
+        if old_import in content and "try:" not in content: # 簡單防呆，避免重複修復
+            print(f"正在修復 {file_path} 中的 Nadam 匯入問題...")
+            new_content = content.replace(old_import, new_import)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            print("修復完成。")
+        else:
+            # print("optim_factory.py 無需修復或已修復。")
+            pass
+            
+    except Exception as e:
+        print(f"嘗試修復 optim_factory.py 失敗: {e}")
+
 if not os.path.exists(OPTIM_FACTORY_PATH):
     print(f"偵測到 {CONVNEXT_V2_DIR} 資料夾內容缺失，正在嘗試自動下載並設置...")
     zip_path = os.path.join(os.getcwd(), 'ConvNeXt-V2-main.zip')
@@ -49,8 +72,7 @@ if not os.path.exists(OPTIM_FACTORY_PATH):
             zip_ref.extractall(os.getcwd())
         
         # 3. 移動內容到目標資料夾
-        # 解壓後通常會產生一個 ConvNeXt-V2-main 的資料夾，我們需要將其內容移動到 ConvNeXt_V2_Official
-        if os.path.exists(CONVNEXT_V2_DIR): # 如果 ConvNeXt_V2_Official 已存在，先清空
+        if os.path.exists(CONVNEXT_V2_DIR): 
             shutil.rmtree(CONVNEXT_V2_DIR)
         shutil.move(extracted_dir_name, CONVNEXT_V2_DIR)
         print(f"  資料夾 {CONVNEXT_V2_DIR} 設置成功！")
@@ -63,9 +85,12 @@ if not os.path.exists(OPTIM_FACTORY_PATH):
         print("!"*60 + "\n")
         sys.exit(1)
     finally:
-        # 清理下載的 ZIP 檔案
         if os.path.exists(zip_path):
             os.remove(zip_path)
+
+# 無論是否剛下載，都嘗試修復匯入問題 (針對現有但有問題的檔案)
+if os.path.exists(OPTIM_FACTORY_PATH):
+    fix_optim_factory_import(OPTIM_FACTORY_PATH)
 
 try:
     from optim_factory import create_optimizer, LayerDecayValueAssigner
