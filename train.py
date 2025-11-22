@@ -14,6 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 import shutil
 import timm 
 from timm.utils import ModelEmaV2
+from torchvision import datasets, transforms # 補回遺漏的 imports
 
 # ==============================================================================
 # Helper Functions
@@ -65,7 +66,7 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, scaler=None, e
                 filtered_state_dict[k] = v
             else:
                 print(f"  警告: 跳過載入層 '{k}'，因為形狀不匹配 (Checkpoint: {v.shape}, Model: {model_state_dict[k].shape})")
-        else:
+        else: 
              pass # Skip missing keys
              
     model.load_state_dict(filtered_state_dict, strict=False)
@@ -117,11 +118,11 @@ def update_trained_history(history_file, class_names):
                 f.write(f"\n# --- [{timestamp}] Training Session ---\n")
                 for c in new_classes:
                     f.write(f"{c}\n")
-            print(f"已新增 {len(new_classes)} 位作者到歷史紀錄。 ")
+            print(f"已新增 {len(new_classes)} 位作者到歷史紀錄。")
         except Exception as e:
             print(f"寫入歷史檔案失敗: {e}")
     else:
-        print("沒有新的作者需要記錄。 ")
+        print("沒有新的作者需要記錄。")
 
 def build_resume_command(checkpoint_path):
     args = sys.argv[:]
@@ -214,7 +215,6 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
 
                 running_loss = 0.0
                 running_corrects = 0
-                running_corrects_top5 = 0
                 
                 optimizer.zero_grad(set_to_none=True)
                 eval_model = ema_model.module if ema_model is not None and phase == 'val' else model
@@ -265,9 +265,8 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
                     running_loss += loss.item() * batch_size * (accumulation_steps if phase == 'train' else 1)
                     
                     if not mixed:
-                        res = accuracy(outputs, labels, topk=(1, 5))
+                        res = accuracy(outputs, labels, topk=(1,))
                         running_corrects += res[0].item() * batch_size / 100
-                        running_corrects_top5 += res[1].item() * batch_size / 100
                     else:
                         _, preds = torch.max(outputs, 1)
                         if lam > 0.5:
@@ -277,7 +276,6 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
 
                 epoch_loss = running_loss / dataset_sizes[phase]
                 epoch_acc = running_corrects / dataset_sizes[phase]
-                epoch_acc_top5 = running_corrects_top5 / dataset_sizes[phase] if not (phase=='train' and (use_mixup or use_cutmix)) else 0.0
 
                 if phase == 'train':
                     writer.add_scalar('Loss/train', epoch_loss, epoch)
@@ -285,7 +283,6 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
                 else:
                     writer.add_scalar('Loss/val', epoch_loss, epoch)
                     writer.add_scalar('Accuracy/val_top1', epoch_acc, epoch)
-                    writer.add_scalar('Accuracy/val_top5', epoch_acc_top5, epoch)
 
                     checkpoint = {
                         'epoch': epoch + 1,
@@ -312,9 +309,9 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
                     save_checkpoint(checkpoint, is_best, checkpoint_dir, filename=f'checkpoint_last.pth')
 
                 if phase == 'val':
-                    print(f'{phase} Loss: {epoch_loss:.4f} Acc@1: {epoch_acc:.4f} Acc@5: {epoch_acc_top5:.4f}')
+                    print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
                 else:
-                    print(f'{phase} Loss: {epoch_loss:.4f} Acc@1: {epoch_acc:.4f}')
+                    print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
 
             writer.add_scalar('Learning Rate', exp_lr_scheduler.get_last_lr()[0], epoch)
             exp_lr_scheduler.step()
@@ -398,7 +395,7 @@ def main():
     parser.add_argument('--cutmix_alpha', type=float, default=0.4, help='Cutmix alpha')
     
     # 這些參數現在由 timm 處理或簡化
-    parser.add_argument('--warmup_epochs', type=int, default=5, help='Warmup 輪數') # 預設改為 5
+    parser.add_argument('--warmup_epochs', type=int, default=5, help='Warmup 輪數')
     parser.add_argument('--amp', action='store_true', help='啟用 AMP 混合精度')
     parser.add_argument('--bf16', action='store_true', help='啟用 BF16')
     parser.add_argument('--model_ema', action='store_true', help='啟用 EMA')
@@ -413,12 +410,9 @@ def main():
 
     args = parser.parse_args()
 
-    from torchvision import datasets, transforms
-
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"使用裝置: {device}")
 
-    # 設定輸出與 Checkpoint 目錄
     if os.path.dirname(args.save_path):
         full_save_path = args.save_path
     else:
@@ -428,11 +422,10 @@ def main():
     checkpoint_dir = os.path.dirname(full_save_path)
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # 初始 TensorBoard (明確創建日誌目錄)
     log_dir_base = 'runs'
-    os.makedirs(log_dir_base, exist_ok=True) # 確保 runs/ 根目錄存在
+    os.makedirs(log_dir_base, exist_ok=True)
     log_dir_name = os.path.join(log_dir_base, f'{args.model}_{time.strftime("%Y%m%d-%H%M%S")}')
-    os.makedirs(log_dir_name, exist_ok=True) # 確保特定模型日誌目錄存在
+    os.makedirs(log_dir_name, exist_ok=True)
     writer = SummaryWriter(log_dir_name)
 
     data_transforms = {
@@ -505,7 +498,7 @@ def main():
                 msg = model_ft.load_state_dict(state_dict, strict=False)
                 print(f"權重載入結果: {msg}")
             else:
-                print(f"警告: 找不到指定的權重檔 {args.pretrained_path}，使用隨機初始化。 ")
+                print(f"警告: 找不到指定的權重檔 {args.pretrained_path}，使用隨機初始化。")
 
     except Exception as e:
         print(f"timm 建立模型失敗: {e}")
