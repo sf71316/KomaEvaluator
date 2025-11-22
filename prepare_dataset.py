@@ -216,7 +216,7 @@ def extract_and_scan_archive(archive_path, extract_to, valid_extensions, min_ar,
                 z.extractall(path=extract_to)
                 extracted_files = all_files
         else:
-            return [] # Should not happen if caller checks extension
+            return [] 
 
         # 掃描解壓後的檔案
         for file_rel_path in extracted_files:
@@ -260,7 +260,9 @@ def prepare_dataset(
     min_aspect_ratio=0.5,
     max_aspect_ratio=2.0,
     num_workers=8,
-    debug_mode=False
+    debug_mode=False,
+    ignore_low_count=False,
+    low_count_threshold=0.5
 ):
     if os.path.exists(target_dataset_dir):
         shutil.rmtree(target_dataset_dir)
@@ -270,6 +272,7 @@ def prepare_dataset(
 
     total_artists = len(selected_artists)
     valid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
+    ignored_artists_list = [] # 記錄被忽略的作者
     
     for idx, artist_name in enumerate(selected_artists):
         print(f"[{idx+1}/{total_artists}] 正在處理: {artist_name} ...")
@@ -328,7 +331,6 @@ def prepare_dataset(
                     if debug_mode and failed_in_folder:
                          print(f"  [Debug] 資料夾: {item}")
                          print(f"    - 驗證失敗: {len(failed_in_folder)}")
-                         # (可選) 顯示資料夾內的失敗詳情
 
                 # 處理散落的圖片
                 elif item.lower().endswith(valid_extensions):
@@ -342,7 +344,6 @@ def prepare_dataset(
             continue
 
         for work_name, work_images in images_by_work.items():
-            # 去頭去尾 (針對漫畫章節簡單過濾封面/版權頁)
             if len(work_images) > 4:
                 work_images.sort()
                 all_images.extend(work_images[1:-3])
@@ -351,20 +352,30 @@ def prepare_dataset(
 
         random.shuffle(all_images)
 
+        # --- 數量檢查與忽略邏輯 ---
         if current_target_samples is not None:
-             low_threshold = current_target_samples * 0.5
-             if len(all_images) < low_threshold:
-                 print(f"  [警告] 圖片數量 ({len(all_images)}) 低於目標的 50% ({low_threshold})！可能影響訓練效果。")
+             low_threshold = int(current_target_samples * low_count_threshold)
+             
+             if ignore_low_count and len(all_images) < low_threshold:
+                 print(f"  [略過] 圖片數量 ({len(all_images)}) 低於門檻 ({low_threshold})，此作者將不納入訓練。")
+                 ignored_artists_list.append(f"{artist_name} (圖片數: {len(all_images)}, 門檻: {low_threshold})")
+                 if os.path.exists(temp_unzip_dir):
+                    shutil.rmtree(temp_unzip_dir)
+                 continue # 跳過此作者的後續處理
+             
+             elif len(all_images) < low_threshold:
+                 print(f"  [警告] 圖片數量 ({len(all_images)}) 低於目標的 {low_count_threshold*100:.0f}% ({low_threshold})！可能影響訓練效果。")
 
         if current_target_samples is not None and len(all_images) > current_target_samples:
             all_images = random.sample(all_images, current_target_samples)
         
         if len(all_images) < 3:
-            print(f"  警告：有效圖片數量不足 ({len(all_images)}張)，跳過。")
+            print(f"  警告：有效圖片數量極低 ({len(all_images)}張)，跳過。")
             if os.path.exists(temp_unzip_dir):
                 shutil.rmtree(temp_unzip_dir)
             continue
 
+        # 分割與複製
         num_total = len(all_images)
         num_train = int(num_total * train_split)
         num_val = int(num_total * val_split)
@@ -395,6 +406,18 @@ def prepare_dataset(
         if os.path.exists(temp_unzip_dir):
             shutil.rmtree(temp_unzip_dir)
 
+    # 產生忽略清單報告
+    if ignored_artists_list:
+        ignored_file = 'ignored_artists.txt'
+        print(f"\n[注意] 共有 {len(ignored_artists_list)} 位作者因圖片不足而被略過。")
+        try:
+            with open(ignored_file, 'w', encoding='utf-8') as f:
+                f.write(f"# --- [{time.strftime('%Y-%m-%d %H:%M')}] Ignored Artists (Threshold: {low_count_threshold*100}%) ---\n")
+                for item in ignored_artists_list:
+                    f.write(f"{item}\n")
+            print(f"已將名單寫入: {ignored_file}")
+        except Exception as e:
+            print(f"寫入忽略名單失敗: {e}")
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='準備漫畫家畫風分類資料集')
     parser.add_argument('--original_data_dir', type=str, default='MangaOriginalData', help='原始資料來源目錄')
@@ -406,7 +429,11 @@ if __name__ == '__main__':
     parser.add_argument('--min_aspect_ratio', type=float, default=0.5, help='最小長寬比')
     parser.add_argument('--max_aspect_ratio', type=float, default=2.0, help='最大長寬比')
     parser.add_argument('--num_workers', type=int, default=16, help='複製檔案的執行緒數量')
-    parser.add_argument('--debug', action='store_true', help='開啟 Debug 模式，顯示詳細解壓縮與驗證資訊') # 新增參數
+    parser.add_argument('--debug', action='store_true', help='開啟 Debug 模式')
+    
+    # 新增參數
+    parser.add_argument('--ignore_low_count', action='store_true', help='啟用自動忽略圖片不足的作者')
+    parser.add_argument('--low_count_threshold', type=float, default=0.5, help='忽略門檻比例 (預設 0.5，即 50%)')
     
     args = parser.parse_args()
 
@@ -433,7 +460,9 @@ if __name__ == '__main__':
         min_aspect_ratio=args.min_aspect_ratio,
         max_aspect_ratio=args.max_aspect_ratio,
         num_workers=args.num_workers,
-        debug_mode=args.debug # 傳遞 debug 參數
+        debug_mode=args.debug,
+        ignore_low_count=args.ignore_low_count,
+        low_count_threshold=args.low_count_threshold
     )
     print("\n" + "="*60)
     print("資料準備完成！")
