@@ -46,7 +46,7 @@ def fix_optim_factory_import(file_path):
             # print("optim_factory.py 已修復過。")
             return
 
-        # 準備相容性區塊
+        # 準備相容性區塊 (擴充版)
         compatibility_block = [
             "# --- Auto-fixed for timm compatibility ---\n",
             "try:\n",
@@ -56,17 +56,42 @@ def fix_optim_factory_import(file_path):
             "        from torch.optim import Nadam\n",
             "    except ImportError:\n",
             "        pass # Nadam not available\n",
+            "\n",
+            "# Dummy classes for other missing optimizers to prevent name errors if used\n",
+            "class DummyOptimizer:\n",
+            "    pass\n",
+            "if 'NovoGrad' not in locals(): NovoGrad = DummyOptimizer\n",
+            "if 'Lookahead' not in locals(): Lookahead = DummyOptimizer\n",
+            "if 'RAdam' not in locals(): RAdam = DummyOptimizer\n",
+            "if 'Adafactor' not in locals(): Adafactor = DummyOptimizer\n",
             "# -----------------------------------------\n"
         ]
         new_lines.extend(compatibility_block)
 
+        # 需要過濾的舊版 timm 模組
+        problematic_imports = [
+            "timm.optim.nadam",
+            "timm.optim.novograd",
+            "timm.optim.lookahead",
+            "timm.optim.radam",
+            "timm.optim.adafactor",
+            "timm.optim.sgdp",
+            "timm.optim.adamp",
+            "timm.optim.adabelief",
+        ]
+
         for line in lines:
-            # 註解掉原本的 Nadam 匯入
-            if "timm.optim.nadam" in line and "import Nadam" in line:
-                new_lines.append(f"# {line}") # Comment out the old line
-                modified = True
-                print(f"已註解掉舊版匯入: {line.strip()}")
-            else:
+            # 檢查是否包含有問題的匯入
+            hit = False
+            for bad_import in problematic_imports:
+                if bad_import in line and "import" in line:
+                    new_lines.append(f"# {line}") # Comment out
+                    modified = True
+                    print(f"已註解掉舊版匯入: {line.strip()}")
+                    hit = True
+                    break
+            
+            if not hit:
                 new_lines.append(line)
         
         if modified:
