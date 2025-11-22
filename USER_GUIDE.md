@@ -112,8 +112,9 @@ python prepare_dataset.py \
 | `--min_aspect_ratio` | 否 | `0.5` | **最小圖片長寬比**。用於過濾掉過於狹長的圖片。 |
 | `--max_aspect_ratio` | 否 | `2.0` | **最大圖片長寬比**。用於過濾掉過於寬扁的圖片。 |
 | `--num_workers` | 否 | `16` | **複製檔案的執行緒數量**。建議設為 CPU 核心數的 80%。 |
+| `--low_priority` | 否 | `False` | **調降進程優先度**。在背景運行時，降低 CPU/IO 資源佔用，不影響前台操作。 |
 
-## 3. 資料預處理 (Preprocessing) 
+## 3. 資料預處理 (Preprocessing)
 
 此步驟將清洗後的圖片轉換為模型可用的特徵圖 (人臉與紋理)，並自動合併為最終訓練集。我們提供了一個一鍵式腳本來完成所有工作。
 
@@ -124,7 +125,7 @@ python prepare_dataset.py \
 3.  **資料集合併** (`merge_and_split.py`)
 
 ```bash
-python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --target_count 400 --patch_size 224 --cascade lbpcascade_animeface.xml
+python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --target_count 400 --patch_size 224 --cascade lbpcascade_animeface.xml --low_priority
 ```
 
 **參數說明:** 
@@ -141,6 +142,7 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 | `--cascade` | 否 | `lbpcascade_animeface.xml` | **OpenCV Cascade 檔案**。用於人臉偵測。 |
 | `--skip_faces` | 否 | `False` | **跳過人臉裁切步驟**。 |
 | `--skip_patches` | 否 | `False` | **跳過紋理提取步驟**。 |
+| `--low_priority` | 否 | `False` | **調降子進程優先度**。降低子進程的 CPU/IO 資源佔用，不影響前台操作。 |
 
 ---
 
@@ -154,7 +156,7 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 
 **執行訓練指令:** 
 ```bash
-python train.py --data_dir Manga_Dataset_Mixed --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 20 --batch_size 48 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 2 --early_stopping_delta 0.002 --amp --save_path final_model.pth --num_workers 4 --record_history
+python train.py --data_dir Manga_Dataset_Mixed --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 20 --batch_size 48 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 2 --early_stopping_delta 0.002 --amp --save_path final_model.pth --num_workers 4 --record_history --low_priority
 ```
 
 **參數說明:** 
@@ -181,9 +183,9 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnextv2_tiny.fcmae_ft_
 | `--amp` | 否 | `False` | **啟用混合精度訓練**。強烈建議開啟，可節省顯存並加速。 |
 | `--resume_path` | 否 | `None` | **恢復訓練的 Checkpoint 路徑**。用於中斷後繼續訓練。 |
 | `--num_workers` | 否 | `4` | **資料載入執行緒**。在 Windows 上建議設為 `0` 以免報錯，Linux 可設為 `4` 或 `8`。 |
+| `--low_priority` | 否 | `False` | **調降進程優先度**。在背景運行時，降低 CPU/IO 資源佔用，不影響前台操作。 |
 
-### 4.2 中斷與恢復 (Checkpoint & Resume)
-*   **手動中斷**：在終端機按 `Ctrl+C`。程式會自動儲存當前進度 (Checkpoint) 並顯示恢復指令。
+### 4.2 中斷與恢復 (Checkpoint & Resume)*   **手動中斷**：在終端機按 `Ctrl+C`。程式會自動儲存當前進度 (Checkpoint) 並顯示恢復指令。
 *   **恢復訓練**：使用 `--resume_path` 參數指定 Checkpoint 檔案：
     ```bash
     python train.py ... --resume_path DL_Output_Models/convnext_v2_tiny_local/checkpoint_last.pth
