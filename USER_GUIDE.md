@@ -182,7 +182,7 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny --epochs
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
 | `--data_dir` | 是 | `Manga_Dataset` | **訓練資料集目錄**。推薦使用合併後的 `Manga_Dataset_Mixed`。 |
-| `--model` | 否 | `efficientnet_b0` | **使用的模型架構**。支援動態名稱，如 `convnext_v2_tiny`, `convnext_v2_base`。 |
+| `--model` | 否 | `convnext_v2_tiny` | **使用的模型架構**。支援動態名稱，如 `convnext_v2_tiny`, `convnext_v2_base`。 |
 | `--pretrained_path` | 否 | `None` | **預訓練權重路徑**。若未指定，程式會自動嘗試從 `pretrained/` 目錄搜尋。 |
 | `--epochs` | 否 | `20` | **訓練總輪數**。 |
 | `--batch_size` | 否 | `32` | **批次大小**。視顯存大小調整，越大越快但顯存需求越高。 |
@@ -217,7 +217,7 @@ tensorboard --logdir runs
 
 ---
 
-## 5. 模型部署與使用 (Deployment)
+## 5. 模型部署與使用 (Deployment) 
 
 ### 5.1 匯出為 ONNX
 將 PyTorch 模型轉換為通用的 ONNX 格式，以便在 C# 或其他語言中使用。

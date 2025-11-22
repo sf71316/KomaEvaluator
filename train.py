@@ -448,7 +448,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"使用裝置: {device}")
 
-    # 設定輸出與 Checkpoint 目錄
+    # 設定輸出與 Checkpoint 目錄 
     # save_path 例如: DL_Output_Models/convnext_v2/model.pth
     # 如果使用者只給 model.pth，我們預設放到 DL_Output_Models/model_name/ 下
     if os.path.dirname(args.save_path):
