@@ -159,7 +159,7 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 
 **執行訓練指令:**
 ```bash
-python train.py --data_dir Manga_Dataset_Mixed --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
+python train.py --data_dir Manga_Dataset_Mixed --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 20 --batch_size 48 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 2 --early_stopping_delta 0.002 --amp --save_path final_model.pth --num_workers 4 --record_history
 ```
 
 **參數說明:**
@@ -172,19 +172,20 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnextv2_tiny.fcmae_ft_
 | `--model` | 否 | `convnextv2_tiny.fcmae_ft_in22k_in1k` | **使用的模型架構**。支援所有 `timm` 模型名稱 (如 `convnextv2_base.fcmae_ft_in22k_in1k`)。 |
 | `--pretrained_path` | 否 | `None` | **預訓練權重路徑**。若未指定，程式會自動從 `timm` 下載。 |
 | `--epochs` | 否 | `20` | **訓練總輪數**。 |
-| `--batch_size` | 否 | `32` | **批次大小**。視顯存大小調整，越大越快但顯存需求越高。 |
+| `--batch_size` | 否 | `48` | **批次大小**。視顯存大小調整，越大越快但顯存需求越高。 |
 | `--lr` | 否 | `0.001` | **學習率**。ConvNeXt V2 推薦設為 `1.2e-4`。 |
 | `--weight_decay` | 否 | `0.01` | **權重衰減**。用於防止過擬合，ConvNeXt V2 推薦設為 `0.05`。 |
 | `--drop_path` | 否 | `0.0` | **隨機深度率 (Drop Path)**。用於模型正則化，推薦設為 `0.2`。 |
 | `--label_smoothing` | 否 | `0.1` | **標籤平滑**。防止模型對預測過於自信，推薦設為 `0.1`。 |
 | `--warmup_epochs` | 否 | `5` | **熱身輪數**。在訓練初期線性增加學習率。 |
-| `--early_stopping_patience` | 否 | `7` | **提前停止耐心值**。若驗證損失在 N 輪內無改善則停止訓練。 |
+| `--early_stopping_patience` | 否 | `2` | **提前停止耐心值**。若驗證損失在 N 輪內無改善則停止訓練。 |
+| `--early_stopping_delta` | 否 | `0.002` | **提前停止最小變化**。驗證損失需要改善超過此值才算有改善。 |
 | `--save_path` | 否 | `final_model.pth` | **模型儲存檔案名稱**。將儲存在 `DL_Output_Models/[model_name]/` 下。 |
 | `--record_history` | 否 | `False` | **啟用歷史紀錄**。訓練成功後，將本次作者寫入 `trained_history.txt`。 |
 | `--history_file` | 否 | `trained_history.txt` | **歷史紀錄檔案路徑**。配合 `--record_history` 使用。 |
 | `--amp` | 否 | `False` | **啟用混合精度訓練**。強烈建議開啟，可節省顯存並加速。 |
 | `--resume_path` | 否 | `None` | **恢復訓練的 Checkpoint 路徑**。用於中斷後繼續訓練。 |
-| `--num_workers` | 否 | `0` | **資料載入執行緒**。在 Windows 上建議設為 `0` 以免報錯，Linux 可設為 `4` 或 `8`。 |
+| `--num_workers` | 否 | `4` | **資料載入執行緒**。在 Windows 上建議設為 `0` 以免報錯，Linux 可設為 `4` 或 `8`。 |
 
 ### 4.2 中斷與恢復 (Checkpoint & Resume)
 *   **手動中斷**：在終端機按 `Ctrl+C`。程式會自動儲存當前進度 (Checkpoint) 並顯示恢復指令。
