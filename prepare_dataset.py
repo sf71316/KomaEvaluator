@@ -9,16 +9,19 @@ import psutil
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+import py7zr
 
 def is_image_valid(image_path, min_aspect_ratio, max_aspect_ratio):
     try:
         with Image.open(image_path) as img:
             width, height = img.size
-            if height == 0: return False
+            if height == 0: return False, "Height is 0"
             aspect_ratio = width / height
-            return min_aspect_ratio <= aspect_ratio <= max_aspect_ratio
+            if not (min_aspect_ratio <= aspect_ratio <= max_aspect_ratio):
+                return False, f"Aspect ratio {aspect_ratio:.2f} out of range"
+            return True, "OK"
     except Exception as e:
-        return False
+        return False, f"Open error: {str(e)}"
 
 def load_trained_history(history_file='trained_history.txt'):
     if not os.path.exists(history_file):
@@ -72,9 +75,6 @@ def get_user_confirmed_allowlist(src_dir, allowlist_file='whitelist.txt'):
             existing_artists_in_file = set()
             with open(allowlist_file, 'r', encoding='utf-8') as f:
                 raw_content = f.read()
-            
-            # 簡單檢查是否已存在 (包含註解的)
-            # 這裡簡化邏輯：只要名字出現在檔案內就算已知
             
             for artist in all_artists_in_dir:
                 if artist not in raw_content: 
@@ -145,9 +145,9 @@ def check_disk_space_and_confirm(target_dir, artists, trained_history, num_sampl
             if os.path.exists(artist_src_path):
                 for root, dirs, files in os.walk(artist_src_path):
                     for file in files:
-                        if file.lower().endswith(tuple(['.zip', '.jpg', '.jpeg', '.png', '.bmp', '.webp'])):
+                        if file.lower().endswith(tuple(['.zip', '.7z', '.jpg', '.jpeg', '.png', '.bmp', '.webp'])):
                             raw_data_size_mb += os.path.getsize(os.path.join(root, file)) / (1024**2)
-        estimated_total_mb = raw_data_size_mb * 1.5
+        estimated_total_mb = raw_data_size_mb * 1.3
         artist_stats['full'] = len(artists)
 
     estimated_gb = estimated_total_mb / 1024
@@ -157,7 +157,7 @@ def check_disk_space_and_confirm(target_dir, artists, trained_history, num_sampl
     print("="*40)
     print(f"全量訓練作者數 (新資料): {artist_stats['full']}")
     print(f"減量訓練作者數 (已訓練): {artist_stats['reduced']}")
-    print(f"預估目標資料集大小: 約 {estimated_gb:.2f} GB (這不含中間產物如 temp_unzip)")
+    print(f"預估目標資料集大小: 約 {estimated_gb:.2f} GB")
     print(f"磁碟剩餘空間: {free_gb:.2f} GB")
     
     if estimated_gb > free_gb * 0.9:
@@ -182,6 +182,72 @@ def copy_file_task(src, dst):
         print(f"複製失敗 {src}: {e}")
         return False
 
+def extract_and_scan_archive(archive_path, extract_to, valid_extensions, min_ar, max_ar, debug=False):
+    """
+    解壓縮並掃描圖片，返回有效圖片路徑列表。
+    支援 .zip 和 .7z。 .rar 不支援但會提示。
+    """
+    valid_images = []
+    failed_images = [] # (filename, reason)
+    total_files_count = 0
+    
+    ext = os.path.splitext(archive_path)[1].lower()
+    
+    if ext == '.rar':
+        print(f"  [跳過] 不支援 RAR 格式: {os.path.basename(archive_path)} (請手動解壓或轉為 zip/7z)")
+        return []
+
+    try:
+        extracted_files = []
+        
+        if ext == '.zip':
+            with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+                all_files = zip_ref.namelist()
+                total_files_count = len(all_files)
+                # 過濾掉 __MACOSX 等系統檔
+                files_to_extract = [f for f in all_files if not f.startswith('__MACOSX')]
+                zip_ref.extractall(extract_to, members=files_to_extract)
+                extracted_files = files_to_extract
+                
+        elif ext == '.7z':
+            with py7zr.SevenZipFile(archive_path, mode='r') as z:
+                all_files = z.getnames()
+                total_files_count = len(all_files)
+                z.extractall(path=extract_to)
+                extracted_files = all_files
+        else:
+            return [] # Should not happen if caller checks extension
+
+        # 掃描解壓後的檔案
+        for file_rel_path in extracted_files:
+            full_path = os.path.join(extract_to, file_rel_path)
+            if os.path.isfile(full_path) and file_rel_path.lower().endswith(valid_extensions):
+                is_valid, reason = is_image_valid(full_path, min_ar, max_ar)
+                if is_valid:
+                    valid_images.append(full_path)
+                else:
+                    if debug:
+                        failed_images.append((file_rel_path, reason))
+            
+        if debug:
+            print(f"  [Debug] 壓縮檔: {os.path.basename(archive_path)}")
+            print(f"    - 檔案總數: {total_files_count}")
+            print(f"    - 有效圖片: {len(valid_images)}")
+            print(f"    - 驗證失敗: {len(failed_images)}")
+            if failed_images:
+                print(f"    - 失敗詳情 (前 5 筆):")
+                for fail_item in failed_images[:5]:
+                    print(f"      * {fail_item[0]}: {fail_item[1]}")
+                if len(failed_images) > 5:
+                    print(f"      ... 還有 {len(failed_images) - 5} 筆")
+
+    except (zipfile.BadZipFile, py7zr.exceptions.Bad7zFile):
+        print(f"  [錯誤] 損壞的壓縮檔: {os.path.basename(archive_path)}")
+    except Exception as e:
+        print(f"  [錯誤] 解壓失敗 {os.path.basename(archive_path)}: {e}")
+
+    return valid_images
+
 def prepare_dataset(
     original_data_dir,
     target_dataset_dir,
@@ -193,7 +259,8 @@ def prepare_dataset(
     num_samples_per_artist=None,
     min_aspect_ratio=0.5,
     max_aspect_ratio=2.0,
-    num_workers=8
+    num_workers=8,
+    debug_mode=False
 ):
     if os.path.exists(target_dataset_dir):
         shutil.rmtree(target_dataset_dir)
@@ -202,9 +269,7 @@ def prepare_dataset(
     os.makedirs(os.path.join(target_dataset_dir, 'test'), exist_ok=True)
 
     total_artists = len(selected_artists)
-    
-    # 用於收集所有複製任務，最後統一執行或分批執行
-    # 為了避免記憶體爆炸，我們還是按畫師處理，但複製過程並行化
+    valid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
     
     for idx, artist_name in enumerate(selected_artists):
         print(f"[{idx+1}/{total_artists}] 正在處理: {artist_name} ...")
@@ -226,38 +291,58 @@ def prepare_dataset(
 
         all_images = []
         images_by_work = defaultdict(list)
-        valid_extensions = ('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp')
 
         if os.path.exists(artist_original_dir):
             for item in os.listdir(artist_original_dir):
                 item_path = os.path.join(artist_original_dir, item)
-                if item.lower().endswith('.zip'):
-                    try:
-                        with zipfile.ZipFile(item_path, 'r') as zip_ref:
-                            image_files_in_zip = [
-                                f for f in zip_ref.namelist() 
-                                if not f.startswith('__MACOSX') and f.lower().endswith(valid_extensions)
-                            ]
-                            zip_ref.extractall(temp_unzip_dir)
-                            for img_file in image_files_in_zip:
-                                extracted_path = os.path.join(temp_unzip_dir, img_file)
-                                if os.path.exists(extracted_path) and is_image_valid(extracted_path, min_aspect_ratio, max_aspect_ratio):
-                                    images_by_work[item].append(extracted_path)
-                    except zipfile.BadZipFile:
-                        print(f"  警告：無法開啟 ZIP 檔案 {item_path}。")
+                
+                # 處理壓縮檔
+                if item.lower().endswith(('.zip', '.7z', '.rar')):
+                    extracted_imgs = extract_and_scan_archive(
+                        item_path, 
+                        temp_unzip_dir, 
+                        valid_extensions, 
+                        min_aspect_ratio, 
+                        max_aspect_ratio, 
+                        debug=debug_mode
+                    )
+                    if extracted_imgs:
+                        images_by_work[item].extend(extracted_imgs)
+                
+                # 處理已解壓資料夾
                 elif os.path.isdir(item_path):
+                    folder_imgs = []
+                    failed_in_folder = []
                     for img_name in os.listdir(item_path):
-                        full_img_path = os.path.join(item_path, img_name)
-                        if img_name.lower().endswith(valid_extensions) and is_image_valid(full_img_path, min_aspect_ratio, max_aspect_ratio):
-                            images_by_work[item].append(full_img_path)
+                        if img_name.lower().endswith(valid_extensions):
+                            full_img_path = os.path.join(item_path, img_name)
+                            is_valid, reason = is_image_valid(full_img_path, min_aspect_ratio, max_aspect_ratio)
+                            if is_valid:
+                                folder_imgs.append(full_img_path)
+                            elif debug_mode:
+                                failed_in_folder.append((img_name, reason))
+                    
+                    if folder_imgs:
+                        images_by_work[item].extend(folder_imgs)
+                    
+                    if debug_mode and failed_in_folder:
+                         print(f"  [Debug] 資料夾: {item}")
+                         print(f"    - 驗證失敗: {len(failed_in_folder)}")
+                         # (可選) 顯示資料夾內的失敗詳情
+
+                # 處理散落的圖片
                 elif item.lower().endswith(valid_extensions):
-                    if is_image_valid(item_path, min_aspect_ratio, max_aspect_ratio):
+                    is_valid, reason = is_image_valid(item_path, min_aspect_ratio, max_aspect_ratio)
+                    if is_valid:
                         images_by_work['__loose_files__'].append(item_path)
+                    elif debug_mode:
+                        print(f"  [Debug] 散圖失敗 {item}: {reason}")
         else:
             print(f"  警告: 原始目錄不存在，跳過。")
             continue
 
         for work_name, work_images in images_by_work.items():
+            # 去頭去尾 (針對漫畫章節簡單過濾封面/版權頁)
             if len(work_images) > 4:
                 work_images.sort()
                 all_images.extend(work_images[1:-3])
@@ -266,7 +351,6 @@ def prepare_dataset(
 
         random.shuffle(all_images)
 
-        # 低標警告
         if current_target_samples is not None:
              low_threshold = current_target_samples * 0.5
              if len(all_images) < low_threshold:
@@ -300,11 +384,9 @@ def prepare_dataset(
                     dest_path = os.path.join(dest_dir, f"{base}_{random.randint(1000, 9999)}{ext}")
                 copy_tasks.append((img_path, dest_path))
         
-        # 多執行緒複製
         if copy_tasks:
             with ThreadPoolExecutor(max_workers=num_workers) as executor:
                 futures = [executor.submit(copy_file_task, src, dst) for src, dst in copy_tasks]
-                # 這裡不顯示詳細進度條，以免刷屏，只在最後顯示統計
                 for _ in as_completed(futures):
                     pass
         
@@ -314,16 +396,17 @@ def prepare_dataset(
             shutil.rmtree(temp_unzip_dir)
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='準備漫畫家畫風分類資料集 (支援互動式白名單與增量訓練)')
+    parser = argparse.ArgumentParser(description='準備漫畫家畫風分類資料集')
     parser.add_argument('--original_data_dir', type=str, default='MangaOriginalData', help='原始資料來源目錄')
     parser.add_argument('--target_dataset_dir', type=str, default='Manga_Dataset_Clean', help='目標資料集目錄')
-    parser.add_argument('--artists', nargs='*', default=[], help='(可選) 直接指定要處理的藝術家，若使用此參數將跳過白名單流程')
+    parser.add_argument('--artists', nargs='*', default=[], help='(可選) 直接指定要處理的藝術家')
     parser.add_argument('--whitelist', type=str, default='whitelist.txt', help='白名單檔案名稱')
     parser.add_argument('--history', type=str, default='trained_history.txt', help='訓練歷史紀錄檔案')
     parser.add_argument('--num_samples_per_artist', type=int, default=None, help='每個藝術家取樣的總張數')
     parser.add_argument('--min_aspect_ratio', type=float, default=0.5, help='最小長寬比')
     parser.add_argument('--max_aspect_ratio', type=float, default=2.0, help='最大長寬比')
     parser.add_argument('--num_workers', type=int, default=16, help='複製檔案的執行緒數量')
+    parser.add_argument('--debug', action='store_true', help='開啟 Debug 模式，顯示詳細解壓縮與驗證資訊') # 新增參數
     
     args = parser.parse_args()
 
@@ -349,7 +432,8 @@ if __name__ == '__main__':
         num_samples_per_artist=args.num_samples_per_artist,
         min_aspect_ratio=args.min_aspect_ratio,
         max_aspect_ratio=args.max_aspect_ratio,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        debug_mode=args.debug # 傳遞 debug 參數
     )
     print("\n" + "="*60)
     print("資料準備完成！")

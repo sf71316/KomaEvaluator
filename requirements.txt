@@ -3,3 +3,9 @@ scikit-learn
 --index-url https://download.pytorch.org/whl/cu121
 torch==2.5.1
 torchvision==0.20.1
+timm
+tensorboard
+Pillow
+tqdm
+psutil
+py7zr
