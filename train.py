@@ -408,7 +408,7 @@ import shutil
 def main():
     parser = argparse.ArgumentParser(description='漫畫家畫風分類模型訓練 (支援 Checkpoint 與 History)')
     parser.add_argument('--data_dir', type=str, default='Manga_Dataset', help='資料集路徑')
-    parser.add_argument('--model', type=str, default='efficientnet_b0', help='模型名稱')
+    parser.add_argument('--model', type=str, default='convnext_v2_tiny', help='模型名稱')
     parser.add_argument('--save_path', type=str, default='final_model.pth', help='儲存模型權重的檔案名稱 (相對路徑)')
     parser.add_argument('--lr', type=float, default=0.001, help='學習率')
     parser.add_argument('--batch_size', type=int, default=32, help='批次大小')
