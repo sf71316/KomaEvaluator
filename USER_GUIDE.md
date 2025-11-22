@@ -198,7 +198,7 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny --epochs
     ```bash
     python train.py ... --resume_path DL_Output_Models/convnext_v2_tiny_local/checkpoint_last.pth
     ```
-    程式會自動載入模型權重、優化器狀態、Epoch 數，並從中斷點繼續訓練。
+    程式會自動載入模型權重、優化器狀態、Epoch 數，並從中斷點繼續訓練。 
 
 ### 4.3 監控訓練進度(如果有需要)
 使用 TensorBoard 查看 Loss 和 Accuracy (包含 Top-1 和 Top-5)：
