@@ -542,8 +542,22 @@ def main():
         if args.pretrained_path:
             pretrained_path = args.pretrained_path
         else:
-            # 預設路徑: pretrained/convnextv2_tiny_1k_224_ema.pt
-            pretrained_path = f'pretrained/{func_name}_1k_224_ema.pt'
+            # 自動搜尋 pretrained 目錄下的權重檔
+            # 規則：檔名以模型名稱開頭 (如 convnextv2_tiny)，且副檔名為 .pt 或 .pth
+            search_dir = 'pretrained'
+            pretrained_path = None
+            if os.path.exists(search_dir):
+                candidates = [f for f in os.listdir(search_dir) if f.startswith(func_name) and f.endswith(('.pt', '.pth'))]
+                if candidates:
+                    # 排序以確保確定性 (例如選最新的或最短的)，這裡選字母順序第一個
+                    candidates.sort()
+                    pretrained_path = os.path.join(search_dir, candidates[0])
+                    if len(candidates) > 1:
+                        print(f"提示: 找到多個可能的權重檔，使用第一個: {pretrained_path}")
+            
+            # 如果沒找到，回退到預設檔名以顯示明確的錯誤訊息
+            if not pretrained_path:
+                pretrained_path = f'pretrained/{func_name}_1k_224_ema.pt'
 
         if os.path.exists(pretrained_path):
             checkpoint = torch.load(pretrained_path, map_location='cpu')
