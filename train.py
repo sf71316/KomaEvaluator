@@ -380,7 +380,7 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
 def main():
     parser = argparse.ArgumentParser(description='漫畫家畫風分類模型訓練 (基於 timm)')
     parser.add_argument('--data_dir', type=str, default='Manga_Dataset', help='資料集路徑')
-    parser.add_argument('--model', type=str, default='convnextv2_tiny', help='timm 模型名稱')
+    parser.add_argument('--model', type=str, default='convnextv2_tiny.fcmae_ft_in22k_in1k', help='timm 模型名稱 (如 convnextv2_tiny.fcmae_ft_in22k_in1k)')
     parser.add_argument('--save_path', type=str, default='final_model.pth', help='儲存模型權重的檔案名稱 (相對路徑)')
     parser.add_argument('--lr', type=float, default=0.001, help='學習率')
     parser.add_argument('--batch_size', type=int, default=32, help='批次大小')
@@ -398,7 +398,7 @@ def main():
     parser.add_argument('--cutmix_alpha', type=float, default=0.4, help='Cutmix alpha')
     
     # 這些參數現在由 timm 處理或簡化
-    parser.add_argument('--warmup_epochs', type=int, default=0, help='Warmup 輪數')
+    parser.add_argument('--warmup_epochs', type=int, default=5, help='Warmup 輪數') # 預設改為 5
     parser.add_argument('--amp', action='store_true', help='啟用 AMP 混合精度')
     parser.add_argument('--bf16', action='store_true', help='啟用 BF16')
     parser.add_argument('--model_ema', action='store_true', help='啟用 EMA')
@@ -407,7 +407,7 @@ def main():
     # Checkpoint & History
     parser.add_argument('--resume_path', type=str, default=None, help='恢復訓練的 Checkpoint 路徑')
     parser.add_argument('--load_path', type=str, default=None, help='載入模型權重路徑 (如增量訓練)')
-    parser.add_argument('--pretrained_path', type=str, default=None, help='指定本地預訓練權重路徑 (若不指定則使用 timm 預設)')
+    parser.add_argument('--pretrained_path', type=str, default=None, help='指定本地預訓練權重路徑 (若不指定則由 timm 自動下載)')
     parser.add_argument('--history_file', type=str, default='trained_history.txt', help='訓練歷史紀錄檔案')
     parser.add_argument('--record_history', action='store_true', help='訓練完成後記錄作者到歷史檔案')
 
