@@ -137,6 +137,8 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 | `--target_count` | 否 | `400` | **每個畫師的目標特徵數量** (人臉與紋理各以此為目標)。 |
 | `--faces_dir` | 否 | `Intermediate_Faces` | **人臉特徵中間產出目錄**。 |
 | `--patches_dir` | 否 | `Intermediate_Patches` | **紋理特徵中間產出目錄**。 |
+| `--patch_size` | 否 | `224` | **紋理切塊大小**。 |
+| `--cascade` | 否 | `lbpcascade_animeface.xml` | **OpenCV Cascade 檔案**。用於人臉偵測。 |
 | `--skip_faces` | 否 | `False` | **跳過人臉裁切步驟**。 |
 | `--skip_patches` | 否 | `False` | **跳過紋理提取步驟**。 |
 
