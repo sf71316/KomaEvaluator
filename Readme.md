@@ -15,8 +15,7 @@
 *   **🔄 增量訓練機制**：
     *   智慧記錄已訓練過的作者，再次準備資料時自動執行 **減量採樣 (20%)**，大幅節省硬碟空間與訓練時間。
 *   **🧠 先進模型架構**：
-    *   預設採用 **ConvNeXt V2** (Tiny/Base) 模型，針對漫畫線條與網點特徵有極佳的表現。
-    *   支援 **Top-5 Accuracy** 評估，在數百個類別中提供更客觀的指標。
+    *   預設採用 **ConvNeXt V2** (Tiny) 模型，針對漫畫線條與網點特徵有極佳的表現。
 
 ## 🛠️ 快速開始
 
@@ -37,7 +36,7 @@ python prepare_dataset.py --num_samples_per_artist 400
 ### 3. 資料預處理 (Preprocessing)
 使用一鍵腳本完成人臉裁切、紋理提取與資料集合併：
 ```bash
-python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 8
+python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4
 ```
 
 ### 4. 模型訓練 (Training)
