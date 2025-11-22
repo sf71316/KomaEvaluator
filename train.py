@@ -24,6 +24,8 @@ if 'torch._six' not in sys.modules:
     dummy_six_module = types.ModuleType('torch._six')
     dummy_six_module.container_abcs = collections.abc
     dummy_six_module.string_classes = (str, bytes)
+    # 由於 'inf' 也缺失，直接注入 float('inf')
+    dummy_six_module.inf = float('inf')
     sys.modules['torch._six'] = dummy_six_module
 # --- End GLOBAL Monkey Patch ---
 
