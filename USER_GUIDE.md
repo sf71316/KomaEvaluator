@@ -34,7 +34,7 @@
     ```bash
     pip install -r requirements.txt
     ```
-*確保已安裝 `torch`, `torchvision`, `opencv-python`, `pillow`, `tqdm`, `psutil` 等核心套件。*
+*確保已安裝 `torch`, `torchvision`, `timm`, `py7zr` 等核心套件。*
 
 ### 1.3 目錄結構說明
 ```
@@ -47,6 +47,7 @@ Project_Root/
 ├── DL_Output_Models/       # [輸出] 訓練好的模型與 Checkpoints
 ├── whitelist.txt           # [設定] 作者白名單 (自動生成)
 ├── trained_history.txt     # [紀錄] 已訓練過的作者紀錄 (自動生成)
+├── ignored_artists.txt     # [紀錄] 因圖片不足而被忽略的作者清單
 ├── prepare_dataset.py      # [工具] 資料清洗與採樣
 ├── crop_faces.py           # [工具] 多進程人臉裁切
 ├── prepare_patches.py      # [工具] 多進程紋理提取
@@ -62,14 +63,16 @@ Project_Root/
 此步驟負責從原始壓縮檔中提取圖片、過濾壞檔、並根據歷史紀錄進行動態採樣。
 
 ### 2.1 準備原始資料
-將整理好的漫畫作者資料夾放入 `MangaOriginalData` 中。支援 `.zip` 壓縮檔或直接圖片。
+將整理好的漫畫作者資料夾放入 `MangaOriginalData` 中。支援 `.zip` 和 `.7z` 壓縮檔或直接圖片。
+*   **注意**：目前不支援 `.rar` 格式，請先轉檔或手動解壓。
 
-**預期目錄結構範例:**
+**預期目錄結構範例:** 
 ```
 MangaOriginalData/
 ├── Artist_A/             # 作者 A 的資料夾
 │   ├── Work_A1.zip       # 作品 A1 的壓縮包
-│   ├── Work_A2/          # 作品 A2 的資料夾
+│   ├── Work_A2.7z        # 作品 A2 的壓縮包
+│   ├── Work_A3/          # 作品 A3 的資料夾
 │   │   ├── image_01.jpg
 │   │   └── image_02.png
 │   └── loose_image.webp  # 散落的圖片
@@ -82,7 +85,7 @@ MangaOriginalData/
 ### 2.2 執行清洗腳本
 此步驟是整個資料處理流程的第一步，負責從原始資料中提取、清洗、過濾並分割圖片。它將引導您完成白名單確認與硬碟空間評估。
 
-**指令範例:**
+**指令範例:** 
 ```bash
 python prepare_dataset.py \
     --original_data_dir ./MangaOriginalData \
@@ -90,24 +93,27 @@ python prepare_dataset.py \
     --num_samples_per_artist 400 \
     --whitelist whitelist.txt \
     --history trained_history.txt \
-    --min_aspect_ratio 0.5 \
-    --max_aspect_ratio 2.0
+    --ignore_low_count \
+    --debug
 ```
 
-**參數說明:**
+**參數說明:** 
 
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
-| `--original_data_dir` | 是 | 無 | **原始資料來源目錄路徑**。您的作者資料夾應位於此目錄下 (可為絕對路徑或相對路徑)。 |
-| `--target_dataset_dir` | 是 | `Manga_Dataset_Clean` | **目標資料集輸出目錄路徑**。清洗後的圖片將會輸出到此目錄，並自動分為 `train`, `val`, `test` 子目錄。 |
-| `--num_samples_per_artist` | 否 | `None` | **每個藝術家目標採樣的圖片總數**。若該作者已被記錄在 `trained_history.txt` 中，則會自動調整為 `20%` 的採樣量。若未設定，則提取所有圖片。 |
+| `--original_data_dir` | 是 | 無 | **原始資料來源目錄路徑**。您的作者資料夾應位於此目錄下。 |
+| `--target_dataset_dir` | 是 | `Manga_Dataset_Clean` | **目標資料集輸出目錄路徑**。清洗後的圖片將會輸出到此目錄。 |
+| `--num_samples_per_artist` | 否 | `None` | **每個藝術家目標採樣的圖片總數**。若該作者已被記錄在 `trained_history.txt` 中，則會自動調整為 `20%`。 |
 | `--whitelist` | 否 | `whitelist.txt` | **白名單檔案名稱**。程式會建立或讀取此檔案，以決定哪些作者的資料應被處理。 |
-| `--history` | 否 | `trained_history.txt` | **訓練歷史紀錄檔案名稱**。程式會讀取此檔案來判斷哪些作者是「已訓練」的，以應用減量採樣策略。 |
+| `--history` | 否 | `trained_history.txt` | **訓練歷史紀錄檔案名稱**。用於判斷哪些作者是「已訓練」的。 |
+| `--ignore_low_count` | 否 | `False` | **啟用自動忽略**。若開啟，當作者圖片數量低於目標的一定比例時，將直接略過該作者。 |
+| `--low_count_threshold` | 否 | `0.5` | **忽略門檻**。配合 `--ignore_low_count` 使用，預設為 0.5 (50%)。 |
+| `--debug` | 否 | `False` | **開啟 Debug 模式**。顯示詳細的解壓縮資訊和驗證失敗原因。 |
 | `--min_aspect_ratio` | 否 | `0.5` | **最小圖片長寬比**。用於過濾掉過於狹長的圖片。 |
 | `--max_aspect_ratio` | 否 | `2.0` | **最大圖片長寬比**。用於過濾掉過於寬扁的圖片。 |
-| `--num_workers` | 否 | `16` | **複製檔案的執行緒數量**。建議設為 CPU 核心數的 80% 以獲得最佳效能。 |
+| `--num_workers` | 否 | `16` | **複製檔案的執行緒數量**。建議設為 CPU 核心數的 80%。 |
 
-## 3. 資料預處理 (Preprocessing)
+## 3. 資料預處理 (Preprocessing) 
 
 此步驟將清洗後的圖片轉換為模型可用的特徵圖 (人臉與紋理)，並自動合併為最終訓練集。我們提供了一個一鍵式腳本來完成所有工作。
 
@@ -121,7 +127,7 @@ python prepare_dataset.py \
 python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 8 --target_count 400
 ```
 
-**參數說明:**
+**參數說明:** 
 
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
@@ -140,31 +146,18 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 
 ### 4.1 開始訓練
 
-**重要：預訓練權重下載**
+**關於預訓練權重：**
+本系統使用 `timm` 函式庫，預設會**自動下載**所需的預訓練權重。您只需確保第一次執行時有網路連線即可。
+*   若您需要**離線訓練**，請先下載權重檔 (如 [convnextv2_tiny_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_tiny_1k_224_ema.pt))，並使用 `--pretrained_path` 參數指定。
 
-本系統支援 ConvNeXt V2 的所有變體 (Tiny, Base, Large 等)。請根據您的硬體資源選擇模型並下載對應權重：
-
-
-
-1.  **下載權重檔案**：
-
-    *   **Tiny (推薦)**: [convnextv2_tiny_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_tiny_1k_224_ema.pt)
-    *   **Base**: [convnextv2_base_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_base_1k_224_ema.pt)
-    *   **Large**: [convnextv2_large_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_large_1k_224_ema.pt)
-    *   *(更多版本請參考官方倉庫)*
-
-2.  **放置路徑**：將下載的檔案放入專案根目錄下的 `pretrained/` 資料夾中。
-    *   如果資料夾不存在，請手動建立。
-    *   *提示*: 您也可以使用 `--pretrained_path` 參數指定任意位置的權重檔。
-
-**執行訓練指令:**
+**執行訓練指令:** 
 ```bash
 python train.py --data_dir Manga_Dataset_Mixed --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 20 --batch_size 48 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 2 --early_stopping_delta 0.002 --amp --save_path final_model.pth --num_workers 4 --record_history
 ```
 
-**參數說明:**
+**參數說明:** 
 
-以下是 `train.py` 的詳細參數說明：
+以下是 `train.py` 的詳細參數說明： 
 
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
@@ -212,7 +205,7 @@ tensorboard --logdir runs
 python export_to_onnx.py --model_path DL_Output_Models/convnext_v2_tiny_local/final_model.pth --output_path mysmodel.onnx --model convnext_v2_tiny_local --num_classes <類別數量>
 ```
 
-**參數說明:**
+**參數說明:** 
 
 | 參數 | 必填 | 預設值 | 說明 |
 | :--- | :---: | :--- | :--- |
