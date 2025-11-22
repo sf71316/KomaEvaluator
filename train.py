@@ -32,6 +32,40 @@ CONVNEXT_V2_REPO_URL = "https://github.com/facebookresearch/ConvNeXt-V2/archive/
 CONVNEXT_V2_DIR = 'ConvNeXt_V2_Official'
 OPTIM_FACTORY_PATH = os.path.join(CONVNEXT_V2_DIR, 'optim_factory.py')
 
+def fix_torch_six_import(file_path):
+    """修復 ConvNeXt-V2 程式碼中對舊版 torch._six 的依賴"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        modified = False
+        new_lines = []
+        
+        # 替換邏輯 (根據常見的 _six 用法)
+        replacements = {
+            "from torch._six import container_abcs": "import collections.abc as container_abcs",
+            "from torch._six import string_classes": "import collections.abc as string_classes",
+            "string_classes": "(str, bytes)", # 實際使用時的替換
+            "container_abcs": "(list, tuple)", # 實際使用時的替換 (簡化處理)
+        }
+
+        for line in lines:
+            original_line = line
+            for old_str, new_str in replacements.items():
+                if old_str in line:
+                    line = line.replace(old_str, new_str)
+                    modified = True
+            new_lines.append(line)
+
+        if modified:
+            print(f"正在修復 {file_path} 中的 torch._six 匯入問題...")
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.writelines(new_lines)
+            print("修復完成。")
+
+    except Exception as e:
+        print(f"嘗試修復 {file_path} 失敗: {e}")
+
 def fix_optim_factory_import(file_path):
     """修復 optim_factory.py 中舊版 timm 匯入 Nadam 的問題 (強健版)"""
     try:
@@ -140,9 +174,35 @@ if not os.path.exists(OPTIM_FACTORY_PATH):
         if os.path.exists(zip_path):
             os.remove(zip_path)
 
+    # 執行完下載和解壓縮後，進行通用修復
+    print("正在對 ConvNeXt_V2_Official 檔案進行兼容性修復...")
+    fix_optim_factory_import(OPTIM_FACTORY_PATH) # Nadam 修復
+    # 潛在受影響的檔案列表
+    files_to_patch = [
+        OPTIM_FACTORY_PATH,
+        os.path.join(CONVNEXT_V2_DIR, 'utils.py'),
+        os.path.join(CONVNEXT_V2_DIR, 'models', 'convnextv2.py')
+    ]
+    for f_path in files_to_patch:
+        if os.path.exists(f_path):
+            fix_torch_six_import(f_path)
+
 # 無論是否剛下載，都嘗試修復匯入問題 (針對現有但有問題的檔案)
-if os.path.exists(OPTIM_FACTORY_PATH):
+# 這裡的邏輯需要確保不會重複執行上面已經完成的步驟
+# 所以只處理那些可能未經上面區塊處理的場景（例如檔案已經存在但未被修復）
+if os.path.exists(OPTIM_FACTORY_PATH) and "# --- Auto-fixed for timm compatibility ---" not in open(OPTIM_FACTORY_PATH, 'r', encoding='utf-8').read():
+    print("偵測到 ConvNeXt_V2_Official 檔案需要二次修復...")
     fix_optim_factory_import(OPTIM_FACTORY_PATH)
+    # 再次對可能受影響的檔案進行 torch._six 修復
+    files_to_patch = [
+        OPTIM_FACTORY_PATH,
+        os.path.join(CONVNEXT_V2_DIR, 'utils.py'),
+        os.path.join(CONVNEXT_V2_DIR, 'models', 'convnextv2.py')
+    ]
+    for f_path in files_to_patch:
+        if os.path.exists(f_path):
+            fix_torch_six_import(f_path)
+
 
 try:
     from optim_factory import create_optimizer, LayerDecayValueAssigner
