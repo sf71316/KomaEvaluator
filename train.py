@@ -81,7 +81,7 @@ def load_checkpoint(checkpoint_path, model, optimizer, scheduler, scaler=None, e
         except Exception as e:
             print(f"  警告: 載入優化器狀態失敗 ({e})，將使用新初始化的優化器。")
     else:
-        print("  警告: 由於模型結構改變，跳過載入 Optimizer/Scheduler/Scaler 狀態。 সন")
+        print("  警告: 由於模型結構改變，跳過載入 Optimizer/Scheduler/Scaler 狀態。")
 
     if ema_model and 'ema_model_state_dict' in checkpoint:
         try:
@@ -117,11 +117,11 @@ def update_trained_history(history_file, class_names):
                 f.write(f"\n# --- [{timestamp}] Training Session ---\n")
                 for c in new_classes:
                     f.write(f"{c}\n")
-            print(f"已新增 {len(new_classes)} 位作者到歷史紀錄。 সন")
+            print(f"已新增 {len(new_classes)} 位作者到歷史紀錄。 ")
         except Exception as e:
             print(f"寫入歷史檔案失敗: {e}")
     else:
-        print("沒有新的作者需要記錄。 সন")
+        print("沒有新的作者需要記錄。 ")
 
 def build_resume_command(checkpoint_path):
     args = sys.argv[:]
@@ -418,6 +418,7 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"使用裝置: {device}")
 
+    # 設定輸出與 Checkpoint 目錄
     if os.path.dirname(args.save_path):
         full_save_path = args.save_path
     else:
@@ -427,7 +428,12 @@ def main():
     checkpoint_dir = os.path.dirname(full_save_path)
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    writer = SummaryWriter(f'runs/{args.model}_{time.strftime("%Y%m%d-%H%M%S")}')
+    # 初始 TensorBoard (明確創建日誌目錄)
+    log_dir_base = 'runs'
+    os.makedirs(log_dir_base, exist_ok=True) # 確保 runs/ 根目錄存在
+    log_dir_name = os.path.join(log_dir_base, f'{args.model}_{time.strftime("%Y%m%d-%H%M%S")}')
+    os.makedirs(log_dir_name, exist_ok=True) # 確保特定模型日誌目錄存在
+    writer = SummaryWriter(log_dir_name)
 
     data_transforms = {
         'train': transforms.Compose([
@@ -499,7 +505,7 @@ def main():
                 msg = model_ft.load_state_dict(state_dict, strict=False)
                 print(f"權重載入結果: {msg}")
             else:
-                print(f"警告: 找不到指定的權重檔 {args.pretrained_path}，使用隨機初始化。 সন")
+                print(f"警告: 找不到指定的權重檔 {args.pretrained_path}，使用隨機初始化。 ")
 
     except Exception as e:
         print(f"timm 建立模型失敗: {e}")
