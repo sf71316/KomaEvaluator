@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--patches_dir', type=str, default='Intermediate_Patches', help='紋理特徵輸出目錄')
     parser.add_argument('--output_dir', type=str, default='Manga_Dataset_Mixed', help='最終合併資料集目錄 (輸出)')
     
-    parser.add_argument('--num_workers', type=str, default='8', help='並行處理的核心數')
+    parser.add_argument('--num_workers', type=str, default='4', help='並行處理的核心數')
     parser.add_argument('--target_count', type=str, default='400', help='每個畫師的目標特徵數量')
     parser.add_argument('--patch_size', type=str, default='224', help='紋理切塊大小')
     parser.add_argument('--cascade', type=str, default='lbpcascade_animeface.xml', help='OpenCV Cascade 檔案')
