@@ -33,23 +33,50 @@ CONVNEXT_V2_DIR = 'ConvNeXt_V2_Official'
 OPTIM_FACTORY_PATH = os.path.join(CONVNEXT_V2_DIR, 'optim_factory.py')
 
 def fix_optim_factory_import(file_path):
-    """修復 optim_factory.py 中舊版 timm 匯入 Nadam 的問題"""
+    """修復 optim_factory.py 中舊版 timm 匯入 Nadam 的問題 (強健版)"""
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+            lines = f.readlines()
         
-        # 檢查是否需要修復
-        old_import = "from timm.optim.nadam import Nadam"
-        new_import = "try:\n    from timm.optim.nadam import Nadam\nexcept ImportError:\n    from torch.optim import Nadam"
+        modified = False
+        new_lines = []
         
-        if old_import in content and "try:" not in content: # 簡單防呆，避免重複修復
-            print(f"正在修復 {file_path} 中的 Nadam 匯入問題...")
-            new_content = content.replace(old_import, new_import)
+        # 檢查是否已經修復過 (檢查是否有我們加入的標記)
+        if lines and "# --- Auto-fixed for timm compatibility ---" in lines[0]:
+            # print("optim_factory.py 已修復過。")
+            return
+
+        # 準備相容性區塊
+        compatibility_block = [
+            "# --- Auto-fixed for timm compatibility ---\n",
+            "try:\n",
+            "    from timm.optim.nadam import Nadam\n",
+            "except ImportError:\n",
+            "    try:\n",
+            "        from torch.optim import Nadam\n",
+            "    except ImportError:\n",
+            "        pass # Nadam not available\n",
+            "# -----------------------------------------\n"
+        ]
+        new_lines.extend(compatibility_block)
+
+        for line in lines:
+            # 註解掉原本的 Nadam 匯入
+            if "timm.optim.nadam" in line and "import Nadam" in line:
+                new_lines.append(f"# {line}") # Comment out the old line
+                modified = True
+                print(f"已註解掉舊版匯入: {line.strip()}")
+            else:
+                new_lines.append(line)
+        
+        if modified:
+            print(f"正在寫入修復後的 {file_path}...")
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(new_content)
+                f.writelines(new_lines)
             print("修復完成。")
         else:
-            # print("optim_factory.py 無需修復或已修復。")
+            # 如果沒找到該行，可能是檔案結構不同，但我們還是寫入相容性區塊以防萬一
+            # 不過如果是第一次下載，通常都會有那一行
             pass
             
     except Exception as e:
