@@ -11,9 +11,21 @@ import argparse
 import copy
 from torch.cuda.amp import autocast, GradScaler
 from torch.utils.tensorboard import SummaryWriter
-import shutil # 用於下載檔案
-import urllib.request # 用於下載檔案
-import zipfile # 用於解壓縮檔案
+import shutil
+import urllib.request
+import zipfile
+import collections.abc # For torch._six replacement
+import types # For creating dummy modules
+
+# --- GLOBAL Monkey Patch: Fix for torch._six (Removed in newer PyTorch) ---
+# ConvNeXt V2 code uses: from torch._six import container_abcs, string_classes
+# We'll create a dummy torch._six module and inject replacements into sys.modules.
+if 'torch._six' not in sys.modules:
+    dummy_six_module = types.ModuleType('torch._six')
+    dummy_six_module.container_abcs = collections.abc
+    dummy_six_module.string_classes = (str, bytes)
+    sys.modules['torch._six'] = dummy_six_module
+# --- End GLOBAL Monkey Patch ---
 
 # Mock MinkowskiEngine to avoid ImportError
 class MockSparseTensor:
