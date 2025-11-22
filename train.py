@@ -24,9 +24,28 @@ sys.modules['MinkowskiEngine'] = MockMinkowskiEngine()
 # Add submodule path
 sys.path.append('ConvNeXt_V2_Official')
 
+# Check and auto-initialize submodule
+if not os.path.exists(os.path.join('ConvNeXt_V2_Official', 'optim_factory.py')):
+    print("偵測到 'ConvNeXt_V2_Official' 子模組缺失，正在嘗試自動初始化...")
+    try:
+        import subprocess
+        subprocess.check_call(['git', 'submodule', 'update', '--init', '--recursive'])
+        print("子模組初始化成功！")
+    except Exception as e:
+        print("\n" + "!"*60)
+        print(f"自動初始化失敗: {e}")
+        print("請嘗試手動執行: git submodule update --init --recursive")
+        print("或者確認您已安裝 Git 並網路連線正常。")
+        print("!"*60 + "\n")
+        sys.exit(1)
+
 from torchvision import datasets, models, transforms
-from optim_factory import create_optimizer, LayerDecayValueAssigner
-import utils
+try:
+    from optim_factory import create_optimizer, LayerDecayValueAssigner
+    import utils
+except ImportError as e:
+    print(f"匯入錯誤: {e}")
+    sys.exit(1)
 
 # Import ModelEmaV2
 from timm.utils import ModelEmaV2
