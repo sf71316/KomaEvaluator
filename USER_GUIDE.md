@@ -149,33 +149,20 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 1.  **下載權重檔案**：
 
     *   **Tiny (推薦)**: [convnextv2_tiny_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_tiny_1k_224_ema.pt)
-
     *   **Base**: [convnextv2_base_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_base_1k_224_ema.pt)
-
     *   **Large**: [convnextv2_large_1k_224_ema.pt](https://dl.fbaipublicfiles.com/convnext/convnextv2/im1k/convnextv2_large_1k_224_ema.pt)
-
     *   *(更多版本請參考官方倉庫)*
 
-
-
 2.  **放置路徑**：將下載的檔案放入專案根目錄下的 `pretrained/` 資料夾中。
-
     *   如果資料夾不存在，請手動建立。
-
     *   *提示*: 您也可以使用 `--pretrained_path` 參數指定任意位置的權重檔。
 
-
-
 **執行訓練指令:**
-
 ```bash
-
 python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny --epochs 50 --batch_size 32 --lr 1.2e-4 --weight_decay 0.05 --drop_path 0.2 --label_smoothing 0.1 --warmup_epochs 5 --early_stopping_patience 10 --amp --save_path final_model.pth --record_history
-
 ```
 
 **參數說明:**
-
 
 以下是 `train.py` 的詳細參數說明：
 
@@ -198,7 +185,6 @@ python train.py --data_dir Manga_Dataset_Mixed --model convnext_v2_tiny --epochs
 | `--amp` | 否 | `False` | **啟用混合精度訓練**。強烈建議開啟，可節省顯存並加速。 |
 | `--resume_path` | 否 | `None` | **恢復訓練的 Checkpoint 路徑**。用於中斷後繼續訓練。 |
 | `--num_workers` | 否 | `0` | **資料載入執行緒**。在 Windows 上建議設為 `0` 以免報錯，Linux 可設為 `4` 或 `8`。 |
-
 
 ### 4.2 中斷與恢復 (Checkpoint & Resume)
 *   **手動中斷**：在終端機按 `Ctrl+C`。程式會自動儲存當前進度 (Checkpoint) 並顯示恢復指令。
