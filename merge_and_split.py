@@ -4,6 +4,18 @@ import random
 import argparse
 from pathlib import Path
 from tqdm import tqdm
+import psutil # 導入 psutil
+
+def set_low_priority():
+    try:
+        p = psutil.Process(os.getpid())
+        if os.name == 'nt': # Windows
+            p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else: # Linux
+            p.nice(10) # 0 is normal, 19 is lowest priority
+        print(f"[優先度] 已將進程優先度調降為: BELOW_NORMAL")
+    except Exception as e:
+        print(f"[優先度] 無法調整優先度: {e}")
 
 def main():
     parser = argparse.ArgumentParser()
@@ -11,7 +23,11 @@ def main():
     parser.add_argument('--dst_dir', required=True, help='最終輸出的資料集目錄 (e.g. Manga_Dataset_Mixed)')
     parser.add_argument('--val_ratio', type=float, default=0.15, help='驗證集比例 (預設 0.15)')
     parser.add_argument('--test_ratio', type=float, default=0.15, help='測試集比例 (預設 0.15)')
+    parser.add_argument('--low_priority', action='store_true', help='調降進程優先度 (背景運行)') # 新增參數
     args = parser.parse_args()
+
+    if args.low_priority:
+        set_low_priority()
 
     # 建立目標結構 - 包含 train, val, test
     for split in ['train', 'val', 'test']:
@@ -78,7 +94,7 @@ def main():
     max_allowed = int(min_count * 1.2)
 
     # 第二階段：執行平衡與分割
-    for artist, all_images in artist_images.items():
+    for artist, all_images in tqdm(artist_images.items(), desc="處理畫師", unit="位"):
         original_count = len(all_images)
         
         if len(all_images) > max_allowed:
@@ -89,11 +105,11 @@ def main():
         num_total = len(all_images)
         num_val = int(num_total * args.val_ratio)
         num_test = int(num_total * args.test_ratio)
-        # num_train 是剩下的
+        num_train = num_total - num_val - num_test # num_train 是剩下的
         
-        val_files = all_images[:num_val]
-        test_files = all_images[num_val : num_val + num_test]
-        train_files = all_images[num_val + num_test:]
+        train_files = all_images[:num_train]
+        val_files = all_images[num_train : num_train + num_val]
+        test_files = all_images[num_train + num_val:]
         
         # 複製檔案
         for split, files in [('train', train_files), ('val', val_files), ('test', test_files)]:
@@ -107,7 +123,7 @@ def main():
                 new_name = f"{src_folder_name}_{file_name}"
                 shutil.copy(src_path, os.path.join(dst_artist_path, new_name))
                 
-        print(f"  - {artist}: Train {len(train_files)} / Val {len(val_files)} / Test {len(test_files)} (Total: {len(all_images)})")
+        # print(f"  - {artist}: Train {len(train_files)} / Val {len(val_files)} / Test {len(test_files)} (Total: {len(all_images)})")
 
 if __name__ == '__main__':
     main()

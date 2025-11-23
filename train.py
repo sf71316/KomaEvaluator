@@ -14,11 +14,23 @@ from torch.utils.tensorboard import SummaryWriter
 import shutil
 import timm 
 from timm.utils import ModelEmaV2
-from torchvision import datasets, transforms # 補回遺漏的 imports
+from torchvision import datasets, transforms
+import psutil # 導入 psutil
 
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
+
+def set_low_priority():
+    try:
+        p = psutil.Process(os.getpid())
+        if os.name == 'nt': # Windows
+            p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else: # Linux
+            p.nice(10) # 0 is normal, 19 is lowest priority
+        print(f"[優先度] 已將進程優先度調降為: BELOW_NORMAL")
+    except Exception as e:
+        print(f"[優先度] 無法調整優先度: {e}")
 
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
@@ -309,9 +321,9 @@ def train_model(model, criterion, optimizer, exp_lr_scheduler, dataloaders, writ
                     save_checkpoint(checkpoint, is_best, checkpoint_dir, filename=f'checkpoint_last.pth')
 
                 if phase == 'val':
-                    print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+                    print(f'{phase} Loss: {epoch_loss:.4f} Acc@1: {epoch_acc:.4f}')
                 else:
-                    print(f'{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}')
+                    print(f'{phase} Loss: {epoch_loss:.4f} Acc@1: {epoch_acc:.4f}')
 
             writer.add_scalar('Learning Rate', exp_lr_scheduler.get_last_lr()[0], epoch)
             exp_lr_scheduler.step()
@@ -407,8 +419,12 @@ def main():
     parser.add_argument('--pretrained_path', type=str, default=None, help='指定本地預訓練權重路徑 (若不指定則由 timm 自動下載)')
     parser.add_argument('--history_file', type=str, default='trained_history.txt', help='訓練歷史紀錄檔案')
     parser.add_argument('--record_history', action='store_true', help='訓練完成後記錄作者到歷史檔案')
+    parser.add_argument('--low_priority', action='store_true', help='調降進程優先度 (背景運行)') # 新增參數
 
     args = parser.parse_args()
+
+    if args.low_priority:
+        set_low_priority()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"使用裝置: {device}")

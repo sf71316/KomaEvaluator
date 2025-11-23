@@ -6,6 +6,18 @@ from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 import shutil
+import psutil # 導入 psutil
+
+def set_low_priority():
+    try:
+        p = psutil.Process(os.getpid())
+        if os.name == 'nt': # Windows
+            p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else: # Linux
+            p.nice(10) # 0 is normal, 19 is lowest priority
+        print(f"[優先度] 已將進程優先度調降為: BELOW_NORMAL")
+    except Exception as e:
+        print(f"[優先度] 無法調整優先度: {e}")
 
 def process_single_image(args):
     """
@@ -80,8 +92,13 @@ def main():
     parser.add_argument('--min_size', type=int, default=40)
     parser.add_argument('--scale_factor', type=float, default=1.05)
     parser.add_argument('--min_neighbors', type=int, default=7)
+
+    parser.add_argument('--low_priority', action='store_true', help='調降進程優先度 (背景運行)') # 新增參數
     
     args = parser.parse_args()
+
+    if args.low_priority:
+        set_low_priority()
     
     if not os.path.exists(args.cascade):
         print(f"錯誤: 找不到 Cascade 檔案: {args.cascade}")

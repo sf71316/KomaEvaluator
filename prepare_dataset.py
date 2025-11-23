@@ -5,11 +5,22 @@ import random
 from collections import defaultdict
 import argparse
 from PIL import Image
-import psutil
+import psutil # 導入 psutil
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 import py7zr
+
+def set_low_priority():
+    try:
+        p = psutil.Process(os.getpid())
+        if os.name == 'nt': # Windows
+            p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else: # Linux
+            p.nice(10) # 0 is normal, 19 is lowest priority
+        print(f"[優先度] 已將進程優先度調降為: BELOW_NORMAL")
+    except Exception as e:
+        print(f"[優先度] 無法調整優先度: {e}")
 
 def is_image_valid(image_path, min_aspect_ratio, max_aspect_ratio):
     try:
@@ -418,6 +429,7 @@ def prepare_dataset(
             print(f"已將名單寫入: {ignored_file}")
         except Exception as e:
             print(f"寫入忽略名單失敗: {e}")
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='準備漫畫家畫風分類資料集')
     parser.add_argument('--original_data_dir', type=str, default='MangaOriginalData', help='原始資料來源目錄')
@@ -434,8 +446,12 @@ if __name__ == '__main__':
     # 新增參數
     parser.add_argument('--ignore_low_count', action='store_true', help='啟用自動忽略圖片不足的作者')
     parser.add_argument('--low_count_threshold', type=float, default=0.5, help='忽略門檻比例 (預設 0.5，即 50%)')
+    parser.add_argument('--low_priority', action='store_true', help='調降進程優先度 (背景運行)') # 新增參數
     
     args = parser.parse_args()
+
+    if args.low_priority:
+        set_low_priority()
 
     selected_artists = args.artists
     trained_history = load_trained_history(args.history)

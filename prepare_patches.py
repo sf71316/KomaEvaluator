@@ -6,6 +6,18 @@ import random
 from pathlib import Path
 from tqdm import tqdm
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import psutil # 導入 psutil
+
+def set_low_priority():
+    try:
+        p = psutil.Process(os.getpid())
+        if os.name == 'nt': # Windows
+            p.nice(psutil.BELOW_NORMAL_PRIORITY_CLASS)
+        else: # Linux
+            p.nice(10) # 0 is normal, 19 is lowest priority
+        print(f"[優先度] 已將進程優先度調降為: BELOW_NORMAL")
+    except Exception as e:
+        print(f"[優先度] 無法調整優先度: {e}")
 
 def is_high_quality_patch(patch, std_threshold=30, edge_threshold=0.05):
     """
@@ -28,7 +40,9 @@ def is_high_quality_patch(patch, std_threshold=30, edge_threshold=0.05):
         return False
 
 def extract_patches_from_image(img_path, patch_size=224, attempts=10):
-    """從單張圖片嘗試提取一個高品質切塊"""
+    """
+    從單張圖片嘗試提取一個高品質切塊
+    """
     try:
         # 支援中文路徑讀取
         img = cv2.imdecode(np.fromfile(img_path, dtype=np.uint8), -1)
@@ -55,7 +69,6 @@ def extract_patches_from_image(img_path, patch_size=224, attempts=10):
                 return patch
                 
     except Exception as e:
-        # print(f"Error reading {img_path}: {e}")
         pass
         
     return None
@@ -93,8 +106,6 @@ def process_artist_task(args):
             patch = extract_patches_from_image(file_path, patch_size)
             
             if patch is not None:
-                # 使用 UUID 或 hash 避免多進程或多次執行時檔名衝突，這裡簡單用流水號
-                # 注意：多進程同時寫同一個資料夾可能會有 race condition，但這裡是每個進程負責一個資料夾，所以安全
                 save_name = f"patch_{saved_count:05d}.jpg"
                 save_path = os.path.join(artist_dir, save_name)
                 
@@ -105,7 +116,6 @@ def process_artist_task(args):
                     progress_made = True
         
         if not progress_made:
-            # 如果這一整輪都沒有提取到任何新 patch，可能是圖片品質太差，提前結束
             break
             
     return f"{artist_name}: 完成，共產生 {saved_count} 張 (目標 {target_count})"
@@ -118,8 +128,13 @@ def main():
     parser.add_argument('--patch_size', type=int, default=224, help='切塊大小')
     parser.add_argument('--num_workers', type=int, default=os.cpu_count(), help='並行處理的畫師數量')
     parser.add_argument('--extensions', type=str, default='jpg,jpeg,png,webp,bmp', help='支援的副檔名')
+
+    parser.add_argument('--low_priority', action='store_true', help='調降進程優先度 (背景運行)') # 新增參數
     
     args = parser.parse_args()
+
+    if args.low_priority:
+        set_low_priority()
     
     valid_exts = tuple(f".{ext.strip()}" for ext in args.extensions.split(','))
     
@@ -170,7 +185,6 @@ def main():
         # 使用 tqdm 顯示進度條 (以畫師為單位)
         for future in tqdm(as_completed(futures), total=len(artist_tasks), unit='artist'):
             result = future.result()
-            # print(result) # 可選：顯示詳細日誌
 
     print("\n所有畫師處理完成！")
 
