@@ -125,7 +125,7 @@ python prepare_dataset.py \
 3.  **資料集合併** (`merge_and_split.py`)
 
 ```bash
-python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --target_count 400 --patch_size 224 --cascade lbpcascade_animeface.xml --low_priority
+python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --target_count 400 --patch_size 224 --cascade lbpcascade_animeface.xml --low_priority --suppress_libpng_warnings
 ```
 
 **參數說明:** 
@@ -143,6 +143,7 @@ python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Data
 | `--skip_faces` | 否 | `False` | **跳過人臉裁切步驟**。 |
 | `--skip_patches` | 否 | `False` | **跳過紋理提取步驟**。 |
 | `--low_priority` | 否 | `False` | **調降子進程優先度**。降低子進程的 CPU/IO 資源佔用，不影響前台操作。 |
+| `--suppress_libpng_warnings` | 否 | `False` | **抑制 libpng 警告**。在運行時抑制 `libpng warning: iCCP` 等警告訊息。 |
 
 ---
 

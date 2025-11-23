@@ -3,12 +3,12 @@ import subprocess
 import os
 import sys
 
-def run_command(cmd):
+def run_command(cmd, env=None):
     """執行 shell 指令並即時顯示輸出"""
     print(f"\n[執行指令] {' '.join(cmd)}")
     try:
         # 使用 subprocess.run 執行，並讓 stdout/stderr 直接輸出到終端
-        result = subprocess.run(cmd, check=True)
+        result = subprocess.run(cmd, check=True, env=env)
         return result.returncode == 0
     except subprocess.CalledProcessError as e:
         print(f"指令執行失敗: {e}")
@@ -31,10 +31,20 @@ def main():
     
     parser.add_argument('--skip_faces', action='store_true', help='跳過人臉裁切步驟')
     parser.add_argument('--skip_patches', action='store_true', help='跳過紋理提取步驟')
+    parser.add_argument('--low_priority', action='store_true', help='調降子進程優先度 (背景運行)')
+    
+    # 新增一個參數來控制警告抑制，預設為關閉，但可以啟用
+    parser.add_argument('--suppress_libpng_warnings', action='store_true', help='抑制 libpng 的 iCCP 警告')
     
     args = parser.parse_args()
 
     python_exe = sys.executable
+
+    # 為子進程準備環境變數
+    my_env = os.environ.copy()
+    if args.suppress_libpng_warnings:
+        my_env["PNG_UNTRUSTED_ICC"] = "0"
+        print("[警告抑制] libpng 的 iCCP 警告已抑制。")
 
     # 1. 人臉裁切 (Crop Faces)
     if not args.skip_faces:
@@ -47,9 +57,11 @@ def main():
             '--dst_dir', args.faces_dir,
             '--num_workers', args.num_workers,
             '--cascade', args.cascade
-            # 移除 target_count，不再此階段平衡
         ]
-        if not run_command(cmd_faces):
+        if args.low_priority:
+            cmd_faces.append('--low_priority')
+
+        if not run_command(cmd_faces, env=my_env):
             print("人臉裁切失敗，流程終止。")
             sys.exit(1)
 
@@ -63,10 +75,13 @@ def main():
             '--src_dir', args.src_dir,
             '--dst_dir', args.patches_dir,
             '--num_workers', args.num_workers,
-            '--target_count', args.target_count, # 這裡保留，作為生成上限
+            '--target_count', args.target_count,
             '--patch_size', args.patch_size
         ]
-        if not run_command(cmd_patches):
+        if args.low_priority:
+            cmd_patches.append('--low_priority')
+
+        if not run_command(cmd_patches, env=my_env):
             print("紋理提取失敗，流程終止。")
             sys.exit(1)
 
@@ -75,7 +90,6 @@ def main():
     print("步驟 3/3: 資料集合併 (Merging Datasets)")
     print("="*60)
     
-    # 根據前面的步驟決定要合併哪些目錄
     dirs_to_merge = []
     if not args.skip_faces and os.path.exists(args.faces_dir):
         dirs_to_merge.append(args.faces_dir)
@@ -99,10 +113,11 @@ def main():
         '--dst_dir', args.output_dir,
         '--val_ratio', '0.15',
         '--test_ratio', '0.15'
-        # merge_and_split.py 會自動執行平衡
     ]
-    
-    if not run_command(cmd_merge):
+    if args.low_priority:
+        cmd_merge.append('--low_priority')
+
+    if not run_command(cmd_merge, env=my_env):
         print("資料集合併失敗。")
         sys.exit(1)
 
@@ -111,22 +126,22 @@ def main():
     print(f"最終資料集位於: {args.output_dir}")
     print("接下來，請執行訓練指令：")
     
-    possible_checkpoint = os.path.join('DL_Output_Models', 'convnext_v2_tiny_local', 'checkpoint_last.pth')
-    possible_model = os.path.join('DL_Output_Models', 'convnext_v2_tiny_local', 'final_model.pth')
+    possible_checkpoint = os.path.join('DL_Output_Models', 'convnextv2_tiny.fcmae_ft_in22k_in1k', 'checkpoint_last.pth')
+    possible_model = os.path.join('DL_Output_Models', 'convnextv2_tiny.fcmae_ft_in22k_in1k', 'final_model.pth')
     
     if os.path.exists(possible_checkpoint):
         print("\n[偵測到上次訓練的 Checkpoint]")
         print("若要【接續訓練】(架構/類別未變)，請使用：")
-        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history --resume_path {possible_checkpoint}")
+        print(f"python train.py --data_dir {args.output_dir} --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 50 --record_history --resume_path {possible_checkpoint}")
         print("\n若這是【增量訓練】(有新增作者/類別)，請使用：")
-        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history --load_path {possible_checkpoint}")
+        print(f"python train.py --data_dir {args.output_dir} --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 50 --record_history --load_path {possible_checkpoint}")
     elif os.path.exists(possible_model):
         print("\n[偵測到舊模型權重]")
         print("若要基於舊模型進行【微調】(Fine-tuning)，請使用：")
-        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history --load_path {possible_model}")
+        print(f"python train.py --data_dir {args.output_dir} --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 50 --record_history --load_path {possible_model}")
     else:
         print("\n[全新訓練]")
-        print(f"python train.py --data_dir {args.output_dir} --model convnext_v2_tiny_local --epochs 50 --record_history")
+        print(f"python train.py --data_dir {args.output_dir} --model convnextv2_tiny.fcmae_ft_in22k_in1k --epochs 50 --record_history")
         
     print("="*60)
 

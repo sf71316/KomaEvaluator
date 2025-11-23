@@ -37,7 +37,7 @@ python prepare_dataset.py --num_samples_per_artist 400 --low_priority
 ### 3. 資料預處理 (Preprocessing)
 使用一鍵腳本完成人臉裁切、紋理提取與資料集合併：
 ```bash
-python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --low_priority
+python process_features.py --src_dir Manga_Dataset_Clean --output_dir Manga_Dataset_Mixed --num_workers 4 --low_priority --suppress_libpng_warnings
 ```
 
 ### 4. 模型訓練 (Training)
